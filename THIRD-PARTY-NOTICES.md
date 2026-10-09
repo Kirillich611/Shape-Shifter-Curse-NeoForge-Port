@@ -124,4 +124,3 @@ MixinExtras（MIT）、Gradle wrapper（Apache-2.0）。
 `build.gradle` 中其余依赖由 Gradle 在构建时解析，本仓库未以源码形式再分发，
 各自遵循其授权（Fabric API 为 Apache-2.0、Satin 为 LGPL-3.0、Pehkui 与
 Cardinal Components API 为 MIT 等）。若改动打包的库，请先核对上游授权。
-
