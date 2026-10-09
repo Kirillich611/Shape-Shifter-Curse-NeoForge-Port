@@ -2,7 +2,7 @@
   "schemaVersion": 1,
   "id": "shape-shifter-curse-unofficial",
   "version": "${version}",
-  "name": "Shape Shifter Curse - NeoForge Connector",
+  "name": "Shape Shifter Curse - NeoForge Port",
   "description": "Unofficial Minecraft 1.21.1 compatibility port for NeoForge through Sinytra Connector.",
   "authors": [
     {

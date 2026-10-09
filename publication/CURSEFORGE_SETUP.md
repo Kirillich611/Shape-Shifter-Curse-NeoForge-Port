@@ -8,7 +8,7 @@ The author upload API accepted the JAR, changelog, supported versions and requir
 Page settings are managed in the Author Console: https://authors.curseforge.com/#/projects/1734836
 
 - Account: Kirillich611
-- Title: Shape Shifter Curse - NeoForge Connector
+- Title: Shape Shifter Curse - NeoForge Port
 - Description: PAGE_EN.md in this directory
 - Logo: icon-platform.png (original icon with the NeoForge badge in the top-right corner)
 - Source and issues: https://github.com/Kirillich611/Shape-Shifter-Curse-NeoForge-Connector
