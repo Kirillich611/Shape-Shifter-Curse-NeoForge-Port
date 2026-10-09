@@ -1,0 +1,86 @@
+package net.onixary.shapeShifterCurseFabric.player_animation.v3.AnimStateController;
+
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
+import net.onixary.shapeShifterCurseFabric.ShapeShifterCurseFabric;
+import net.onixary.shapeShifterCurseFabric.client.ShapeShifterCurseFabricClient;
+import net.onixary.shapeShifterCurseFabric.player_animation.AnimationHolder;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AbstractAnimStateController;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AnimSystem;
+import net.onixary.shapeShifterCurseFabric.player_form.IForm;
+import net.onixary.shapeShifterCurseFabric.player_form.PlayerFormBodyType;
+import net.onixary.shapeShifterCurseFabric.player_form.RegPlayerForms;
+import net.onixary.shapeShifterCurseFabric.util.util.DataDumper;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.ArrayList;
+import java.util.List;
+
+import static net.onixary.shapeShifterCurseFabric.ShapeShifterCurseFabric.MOD_ID;
+
+public class TransformingController extends AbstractAnimStateController {
+    private static AnimationHolder anim_on_transform_default = AnimationHolder.EMPTY;
+    private static AnimationHolder anim_on_transform_normal_to_feral = AnimationHolder.EMPTY;
+    private static AnimationHolder anim_on_transform_feral_to_normal = AnimationHolder.EMPTY;
+    private static AnimationHolder anim_on_transform_feral_to_feral = AnimationHolder.EMPTY;
+
+    @Override
+    public @Nullable AnimationHolder getAnimation(Player player, AnimSystem.AnimSystemData data) {
+        String fromFormName = ShapeShifterCurseFabricClient.getClientTransformFromForm(player.getUUID());
+        String toFormName = ShapeShifterCurseFabricClient.getClientTransformToForm(player.getUUID());
+        IForm transformCurrentForm = null;
+        IForm transformToForm = null;
+        try {
+            transformCurrentForm = fromFormName != null ? RegPlayerForms.getPlayerForm(fromFormName) : null;
+            transformToForm = toFormName != null ? RegPlayerForms.getPlayerForm(toFormName) : null;
+        } catch (IllegalArgumentException e) {
+            // 如果解析失败，使用当前形态作为 fallback
+            transformCurrentForm = data.playerForm;
+            transformToForm = data.playerForm;
+        }
+        if(transformCurrentForm == null || transformToForm == null){
+            //ShapeShifterCurseFabric.LOGGER.info("getFormAnimToPlay called with null curForm or null toForm, returning default animation.");
+            return anim_on_transform_default;
+        }
+        try {
+            boolean curIsFeral = transformCurrentForm.getBodyType() == PlayerFormBodyType.FERAL;
+            boolean toIsFeral = transformToForm.getBodyType() == PlayerFormBodyType.FERAL;
+            if(!curIsFeral && toIsFeral)
+            {
+                return anim_on_transform_normal_to_feral;
+            }
+            else if(curIsFeral && !toIsFeral)
+            {
+                return anim_on_transform_feral_to_normal;
+            }
+            else if(curIsFeral && toIsFeral)
+            {
+                return anim_on_transform_feral_to_feral;
+            }
+            return anim_on_transform_default;
+        } catch (Exception e) {
+	        ShapeShifterCurseFabric.LOGGER.error("Error in getFormAnimToPlay: {}", e.getMessage());
+            return anim_on_transform_default;
+        }
+    }
+
+    @Override
+    public void registerAnim(Player player, AnimSystem.AnimSystemData data) {
+        anim_on_transform_default = new AnimationHolder(ResourceLocation.fromNamespaceAndPath(MOD_ID, "player_on_transform"), true);
+        anim_on_transform_normal_to_feral = new AnimationHolder(ResourceLocation.fromNamespaceAndPath(MOD_ID, "player_on_transform_normal_to_feral"), true);
+        anim_on_transform_feral_to_normal = new AnimationHolder(ResourceLocation.fromNamespaceAndPath(MOD_ID, "player_on_transform_feral_to_normal"), true);
+        anim_on_transform_feral_to_feral = new AnimationHolder(ResourceLocation.fromNamespaceAndPath(MOD_ID, "player_on_transform_feral_to_feral"), true);
+        super.registerAnim(player, data);
+    }
+
+    @Override
+    public boolean isEnabled(Player player, AnimSystem.AnimSystemData data) {
+        return ShapeShifterCurseFabricClient.isClientTransforming(player.getUUID());
+    }
+
+    @Override
+    public @NotNull List<AnimationHolder> getAllAnimations() {
+        return DataDumper.buildList(anim_on_transform_default, anim_on_transform_normal_to_feral, anim_on_transform_feral_to_normal, anim_on_transform_feral_to_feral);
+    }
+}

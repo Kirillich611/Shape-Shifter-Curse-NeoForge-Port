@@ -1,0 +1,69 @@
+package net.onixary.shapeShifterCurseFabric.integration.origins.command;
+
+import com.mojang.brigadier.StringReader;
+import com.mojang.brigadier.arguments.ArgumentType;
+import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.exceptions.DynamicCommandExceptionType;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.onixary.shapeShifterCurseFabric.integration.origins.origin.Origin;
+import net.onixary.shapeShifterCurseFabric.integration.origins.origin.OriginLayer;
+import net.onixary.shapeShifterCurseFabric.integration.origins.origin.OriginLayers;
+import net.onixary.shapeShifterCurseFabric.integration.origins.origin.OriginRegistry;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+
+public class OriginArgumentType implements ArgumentType<ResourceLocation> {
+
+   public static final DynamicCommandExceptionType ORIGIN_NOT_FOUND = new DynamicCommandExceptionType(
+       o -> Component.translatable("commands.origin.origin_not_found", o)
+   );
+
+   public static OriginArgumentType origin() {
+      return new OriginArgumentType();
+   }
+
+   public ResourceLocation parse(StringReader stringReader) throws CommandSyntaxException {
+      return ResourceLocation.read(stringReader);
+   }
+
+   public static Origin getOrigin(CommandContext<CommandSourceStack> context, String argumentName) throws CommandSyntaxException {
+
+      ResourceLocation id = context.getArgument(argumentName, ResourceLocation.class);
+
+      try {
+         return OriginRegistry.get(id);
+      }
+
+      catch(IllegalArgumentException e) {
+         throw ORIGIN_NOT_FOUND.create(id);
+      }
+
+   }
+
+   @Override
+   public <S> CompletableFuture<Suggestions> listSuggestions(CommandContext<S> context, SuggestionsBuilder builder) {
+
+      List<ResourceLocation> availableOrigins = new ArrayList<>();
+
+      try {
+          ResourceLocation originLayerId = context.getArgument("layer", ResourceLocation.class);
+          OriginLayer originLayer = OriginLayers.getLayer(originLayerId);
+
+          availableOrigins.add(Origin.EMPTY.getIdentifier());
+          if (originLayer != null) availableOrigins.addAll(originLayer.getOrigins());
+      }
+
+      catch(IllegalArgumentException ignored) {}
+
+      return SharedSuggestionProvider.suggestResource(availableOrigins.stream(), builder);
+
+   }
+
+}

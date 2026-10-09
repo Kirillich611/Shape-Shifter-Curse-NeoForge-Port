@@ -1,0 +1,58 @@
+package net.onixary.shapeShifterCurseFabric.player_form.forms;
+
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.item.ItemStack;
+import net.onixary.shapeShifterCurseFabric.ShapeShifterCurseFabric;
+import net.onixary.shapeShifterCurseFabric.items.RegCustomItem;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AbstractAnimStateController;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AnimStateControllerDP.WithSneakAnimController;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AnimStateEnum;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AnimSystem;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AnimUtils;
+import net.onixary.shapeShifterCurseFabric.player_form.IForm;
+import net.onixary.shapeShifterCurseFabric.player_form.ITransformReason;
+import net.onixary.shapeShifterCurseFabric.player_form.NormalForm;
+import net.onixary.shapeShifterCurseFabric.player_form.RegPlayerForms;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+public class Form_Spider2 extends NormalForm {
+    
+    public Form_Spider2(ResourceLocation formID) {
+        super(formID);
+    }
+
+    @Override
+    public @Nullable IForm getPrevForm(Player player, ITransformReason reason) {
+        if (reason.getReasonType().equals(ITransformReason.ItemReasonID) && reason instanceof ITransformReason.ITransformReasonWithArg<?> reasonEX && reasonEX.getArg() instanceof ItemStack itemStack) {
+            if (itemStack.getItem().equals(RegCustomItem.POWERFUL_INHIBITOR)) {
+                return RegPlayerForms.SPIDER_0;
+            }
+        }
+        return null;
+    }
+
+    // v3动画系统
+    public static final AnimUtils.AnimationHolderData ANIM_SNEAK_IDLE =
+        new AnimUtils.AnimationHolderData(ShapeShifterCurseFabric.identifier("spider_2_sneak_idle"));
+
+    public static final AbstractAnimStateController IDLE_CONTROLLER = 
+        new WithSneakAnimController(null, ANIM_SNEAK_IDLE);
+
+    @Override
+    public @Nullable AbstractAnimStateController getAnimStateController(
+            Player player, 
+            AnimSystem.AnimSystemData animSystemData, 
+            @NotNull ResourceLocation animStateID) {
+        
+        AnimStateEnum state = AnimStateEnum.getStateEnum(animStateID);
+        if (state != null) {
+            return switch (state) {
+                case ANIM_STATE_IDLE -> IDLE_CONTROLLER;
+                default -> null;
+            };
+        }
+        return super.getAnimStateController(player, animSystemData, animStateID);
+    }
+}

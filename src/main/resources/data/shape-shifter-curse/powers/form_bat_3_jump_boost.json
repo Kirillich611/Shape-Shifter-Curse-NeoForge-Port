@@ -1,0 +1,12 @@
+{
+    "type": "shape-shifter-curse:action_on_jump",
+    "entity_condition": {
+        "type": "apoli:sprinting"
+    },
+    "client_action": {
+        "type": "apoli:add_velocity",
+        "space": "local_horizontal_normalized",
+        "z": 0.35,
+        "server": false
+    }
+}

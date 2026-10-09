@@ -1,0 +1,369 @@
+plugins {
+    // 版本在 settings.gradle 的 pluginManagement.plugins 里统一钉死（loom 只能有一个版本在 classpath 上）
+    id 'fabric-loom'
+    id 'maven-publish'
+}
+
+version = "${project.mod_version}${project.special_build_version}+${minecraft_version}"
+group = project.maven_group
+
+// Apoli / Calio 的源码已并入本仓库（见 settings.gradle）。monorepo 下各模块自持版本号没有意义，
+// 这里统一成 SSCU 的 group + version —— 发布坐标因此是
+// net.wuhenqiubai:{shape-shifter-curse-unofficial, Apoli-Legacy, Calio-Legacy}:<同一个版本>。
+// ⚠ 子项目自己的 build 脚本里不能再写 version/group，否则会覆盖这里。
+subprojects {
+    version = rootProject.version
+    group = rootProject.group
+}
+
+// 从Github Action 环境获取构建Channel和BuildVersion
+def channel = System.getenv('channel')
+def build_version = System.getenv('build_version')
+if (channel == null || build_version == null) {
+    channel = "release"
+    build_version = "0"
+}
+
+base {
+    archivesName = project.archives_base_name
+}
+
+loom {
+    runs {
+        client {
+            programArgs([
+                    "--username", "Dev",
+                    "--uuid", "12345678-1234-1234-1234-123456789012"
+            ])
+            runDir "run/client"
+        }
+        server {
+            runDir "run/server"
+        }
+    }
+    accessWidenerPath = file("src/main/resources/shape-shifter-curse.accesswidener")
+    mixin {
+        // NeoForge/Connector 兼容：legacy Mixin AP 按 mixins.json 的 refmap 字段生成 refmap，
+        // Connector 靠 refmap 把发布 jar 的 intermediary 注入点重映射回 mojmap（NeoForge 环境）
+        useLegacyMixinAp = true
+    }
+}
+
+
+repositories {
+    mavenLocal()
+    mavenCentral()
+
+    // Добавлен репозиторий ParchmentMC для исправления ошибки скачивания маппингов
+    maven {
+        name = "ParchmentMC"
+        url = "https://maven.parchmentmc.org"
+    }
+
+    maven {
+        url 'https://maven.aliyun.com/nexus/content/groups/public'
+    }
+    maven {
+        name = "NeoForge"
+        url = "https://maven.neoforged.net/releases/"
+    }
+
+    exclusiveContent {
+
+        forRepository {
+            maven {
+                name = "Modrinth"
+                url = "https://api.modrinth.com/maven"
+            }
+        }
+
+        filter {
+            includeGroup "maven.modrinth"
+        }
+
+    }
+
+    // (Neo)ForgeMaven
+    exclusiveContent {
+        forRepository {
+            maven {
+                url "https://cursemaven.com"
+            }
+        }
+        filter {
+            includeGroup "curse.maven"
+        }
+    }
+
+    maven {
+        name = "QuiltMC"
+        url = "https://maven.quiltmc.org/repository/release"
+    }
+    maven {
+        name = "Ladysnake Mods"
+        url = "https://maven.ladysnake.org/releases"
+    }
+    maven {
+        name = "Ladysnake Mods (snapshots)"
+        url = "https://maven.ladysnake.org/snapshots"
+    }
+    maven {
+        url = "https://maven.cafeteria.dev"
+        content {
+            includeGroup "net.adriantodt.fabricmc"
+        }
+    }
+    maven {
+        url = "https://maven.jamieswhiteshirt.com/libs-release"
+        content {
+            includeGroup "com.jamieswhiteshirt"
+        }
+    }
+    maven {
+        url = "https://masa.dy.fi/maven"
+    }
+    maven {
+        url = "https://jitpack.io"
+    }
+
+    //ModMenu
+    maven {
+        url "https://maven.terraformersmc.com/releases/"
+    }
+
+    maven {
+        name = "Fuzs Mod Resources"
+        url = "https://raw.githubusercontent.com/Fuzss/modresources/main/maven/"
+    }
+    // AppleSkin
+    maven {
+        url "https://maven.ryanliptak.com/"
+    }
+    maven {
+        name = "Jared's maven"
+        url = "https://maven.blamejared.com/"
+    }
+    maven {
+        name = "RedlanceMinecraft"
+        url = "https://repo.redlance.org/public"
+    }
+    // Cloth Config
+    maven {
+        url "https://maven.shedaniel.me/"
+    }
+    maven {
+        name = 'GeckoLib'
+        url 'https://dl.cloudsmith.io/public/geckolib3/geckolib/maven/'
+        content {
+            includeGroup("software.bernie.geckolib")
+        }
+    }
+    maven {
+        name = 'Fabric-Hangbing_Proxy'
+        url = "https://repository.hanbings.io/proxy"
+    }
+    maven {
+        name = 'Fabric-BMCL'
+        url = 'https://bmclapi2.bangbang93.com/maven/'
+    }
+    maven {
+        name = 'Fabric-Meta'
+        url = 'https://meta.fabricmc.net/'
+    }
+    maven {
+        name = 'Fabric-Meta-BMCL'
+        url = 'https://bmclapi2.bangbang93.com/fabric-meta'
+    }
+    maven {
+        name = 'Fabric'
+        url = 'https://maven.fabricmc.net/'
+    }
+}
+
+dependencies {
+
+    //要更改版本，请查看 gradle.properties 文件
+    minecraft "com.mojang:minecraft:${project.minecraft_version}"
+    // mappings "net.fabricmc:yarn:${project.yarn_mappings}:v2"
+    mappings loom.officialMojangMappings()
+    modImplementation "net.fabricmc:fabric-loader:${project.loader_version}"
+
+    modImplementation "net.fabricmc.fabric-api:fabric-api:${project.fabric_version}"
+
+    implementation 'com.google.code.gson:gson:2.12.1'
+
+    //mappings loom.layered() {
+    //    officialMojangMappings()
+    //    parchment("org.parchmentmc.data:parchment-1.20.1:2023.09.03@zip")
+    //}
+
+    //Common 1.20.1+ Latest Only (unused - replaced by GeckoLib)
+
+    //GeckoLib
+    modImplementation "software.bernie.geckolib:geckolib-fabric-${minecraft_version}:${geckolib_version}"
+
+    // satin shader
+    modImplementation "org.ladysnake:satin:${satin_version}"
+
+    // Apoli-Legacy（本仓库子项目，源码已并入；Calio 由它自己传递进来）
+    // ⚠ 同级 loom 项目必须用 `configuration: "namedElements"`（未 remap 的 dev 产物），
+    //   用 `modApi project(":apoli")` 会让 loom 去读 :apoli 的 remap 产物 build/libs/*.jar，
+    //   而那个文件在配置期还不存在 → "Failed to setup Minecraft ... NoSuchFileException"。
+    //   用 api（而非 modApi）也是为了让它以 compile 作用域进发布元数据，Addon 才能只声明 SSCU 传递拿到 Apoli。
+    api project(path: ":apoli", configuration: "namedElements")
+    include project(":apoli")
+
+    modApi("com.github.Virtuoel:Pehkui:${pehkui_version}", {
+        exclude group: "net.fabricmc.fabric-api"
+    })
+
+    modApi("org.ladysnake.cardinal-components-api:cardinal-components-base:${cca_version}") {
+        exclude(group: "net.fabricmc.fabric-api")
+    }
+    include "org.ladysnake.cardinal-components-api:cardinal-components-base:${cca_version}"
+    modApi("org.ladysnake.cardinal-components-api:cardinal-components-entity:${cca_version}") {
+        exclude(group: "net.fabricmc.fabric-api")
+    }
+    include "org.ladysnake.cardinal-components-api:cardinal-components-entity:${cca_version}"
+
+    modApi("me.shedaniel.cloth:cloth-config-fabric:${project.clothconfig_version}") {
+        exclude(group: "net.fabricmc.fabric-api")
+    }
+    //  Modmenu
+    modImplementation "com.terraformersmc:modmenu:${project.mod_menu_version}"
+    // Player Animation Library
+    modImplementation "com.zigythebird.playeranim:PlayerAnimationLibFabric:$pal_version"
+
+    // Trinkets
+    modCompileOnly "dev.emi:trinkets:${project.trinkets_version}"
+
+    modCompileOnly "maven.modrinth:iris:zsoi0dso"
+    modCompileOnly "maven.modrinth:extra-origins:fXaPHAoU"
+    modCompileOnly "maven.modrinth:better-combat:nsxmEb8y"
+    // firstperson transition 依赖问题（dev.tr7zw.transition.mc.GeneralUtil ClassNotFound），暂时不加载
+    modCompileOnly "maven.modrinth:first-person-model:fSfRdYJ6"
+    // modRuntimeOnly "maven.modrinth:first-person-model:fSfRdYJ6"
+    modCompileOnly "maven.modrinth:1j76DVHU:QJsQvQpC" //TacZ
+    modCompileOnly "maven.modrinth:curios:9.5.1+1.21.1"
+    // Curios(NeoForge) 的 API（IDynamicStackHandler 等）依赖 NeoForge 的 IItemHandlerModifiable，
+    // SSC 是 Fabric 编译（无 NeoForge classpath），补 NeoForge compileOnly 仅供编译期解析，运行时由 Connector 提供。
+    compileOnly "net.neoforged:neoforge:21.1.248"
+
+    modCompileOnly "squeek.appleskin:appleskin-fabric:mc1.21-3.0.6"
+    modLocalRuntime "squeek.appleskin:appleskin-fabric:mc1.21-3.0.6"
+
+    modCompileOnly "maven.modrinth:vivecraft:Q589olkQ"
+
+
+    // Tough as nails
+    modCompileOnly "maven.modrinth:tough-as-nails:dLxSK1xF"
+
+    // Presence Footsteps
+    modCompileOnly "maven.modrinth:presence-footsteps:1.11.2+1.21"
+    // modRuntimeOnly "maven.modrinth:presence-footsteps:1.11.2+1.21"
+
+    modCompileOnly "maven.modrinth:biomes-o-plenty:fhyqphwv"
+
+    // 官方Maven仓库速度太慢 改为CurseMaven的源
+    modImplementation "maven.modrinth:jei:HWSzfi9w" //JEI 19.44.0.401 for Fabric 1.21.1
+//    modImplementation "curse.maven:jei-238222:8622779"
+}
+
+processResources {
+    inputs.property "version", project.version
+    inputs.property "minecraft_version", project.minecraft_version
+    inputs.property "loader_version", project.loader_version
+    filteringCharset "UTF-8"
+
+    // Curios 兼容层已改为 src 源码编译（mixin/forge/CurioImpl.java 等），resources 里残留的上游预编译 .class
+    // 会与编译产物在 jar 里重名冲突，打包时排除（源码保存在 src/main/resources 不变，仅不进 jar）。
+    exclude "net/onixary/shapeShifterCurseFabric/mixin/forge/*.class"
+
+    filesMatching("fabric.mod.json") {
+        expand "version": project.version,
+                "minecraft_version": project.minecraft_version,
+                "loader_version": project.loader_version,
+                "CHANNEL": channel,
+                "CHANNEL_VERSION": build_version
+    }
+
+    filesMatching("META-INF/neoforge.mods.toml") {
+        expand "version": project.version
+    }
+}
+
+def targetJavaVersion = 21
+tasks.withType(JavaCompile).configureEach {
+    it.options.encoding = "UTF-8"
+    if (targetJavaVersion >= 10 || JavaVersion.current().isJava10Compatible()) {
+        it.options.release.set(targetJavaVersion)
+    }
+    options.deprecation = false
+    options.compilerArgs = ["-Xlint:-deprecation", "-Xlint:-removal", "-Xmaxerrs", "0"]
+}
+
+java {
+    def javaVersion = JavaVersion.toVersion(targetJavaVersion)
+    if (JavaVersion.current() < javaVersion) {
+        toolchain.languageVersion = JavaLanguageVersion.of(targetJavaVersion)
+    }
+    // Loom will automatically attach sourcesJar to a RemapSourcesJar task and to the "build" task
+    // if it is present.
+    // If you remove this line, sources will not be generated.
+    withSourcesJar()
+}
+
+
+// 代码为 MIT，模型/贴图/动画等资源为 CC BY-NC 4.0，两份协议都要随产物分发
+def licenseFiles = [
+        "LICENSE.txt"              : "LICENSE_${project.base.archivesName.get()}.txt",
+        "LICENSE-CC-BY-NC-4.0.txt" : "LICENSE-CC-BY-NC-4.0_${project.base.archivesName.get()}.txt",
+        "LICENSING.md"             : "LICENSING_${project.base.archivesName.get()}.md",
+        "THIRD-PARTY-NOTICES.md"   : "THIRD-PARTY-NOTICES_${project.base.archivesName.get()}.md",
+]
+
+// 同时覆盖 dev 产物与 remap 后的产物（jar / sourcesJar / remapJar / remapSourcesJar）
+// duplicatesStrategy 说明：remapJar/remapSourcesJar 会继承 jar/sourcesJar 的输出，而后者已经带上这 4 个
+// 协议文件，所以这里再加一次必然重名。Gradle 9 默认对重复条目直接报错（BUILD FAILED），设成 EXCLUDE
+// 让先到的那份生效 —— 两边取自同一个源文件，内容完全相同，无副作用。
+tasks.matching { it.name in ["jar", "sourcesJar", "remapJar", "remapSourcesJar"] }.configureEach {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+    licenseFiles.each { source, target ->
+        from(source) {
+            rename { target }
+        }
+    }
+}
+
+// configure the maven publication
+publishing {
+    publications {
+        create("mavenJava", MavenPublication) {
+            artifactId = project.archives_base_name
+            from components.java
+        }
+    }
+
+    // See https://docs.gradle.org/current/userguide/publishing_maven.html for information on how to set up publishing.
+    repositories {
+        // Add repositories to publish to here.
+        // Notice: This block does NOT have the same function as the block in the top level.
+        // The repositories here will be used for publishing your artifact, not for
+        // retrieving dependencies.
+    }
+}
+// localSourceLaunchers: independent owner and pet development profiles.
+loom {
+    runs {
+        ownerClient {
+            client()
+            runDir "run/local-owner"
+            programArgs "--username", "LocalOwner"
+        }
+        petClient {
+            client()
+            runDir "run/local-pet"
+            programArgs "--username", "LocalPet"
+        }
+    }
+}

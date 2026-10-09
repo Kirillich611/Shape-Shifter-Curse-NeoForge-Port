@@ -1,0 +1,156 @@
+package net.onixary.shapeShifterCurseFabric.command;
+
+import com.google.gson.JsonObject;
+import com.mojang.brigadier.StringReader;
+import com.mojang.brigadier.arguments.ArgumentType;
+import com.mojang.brigadier.context.CommandContext;
+import com.mojang.brigadier.exceptions.CommandSyntaxException;
+import com.mojang.brigadier.exceptions.DynamicCommandExceptionType;
+import com.mojang.brigadier.suggestion.Suggestions;
+import com.mojang.brigadier.suggestion.SuggestionsBuilder;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.commands.CommandBuildContext;
+import net.minecraft.commands.CommandSourceStack;
+import net.minecraft.commands.SharedSuggestionProvider;
+import net.minecraft.commands.synchronization.ArgumentTypeInfo;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.network.chat.Component;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
+import net.onixary.shapeShifterCurseFabric.ShapeShifterCurseFabric;
+import net.onixary.shapeShifterCurseFabric.player_form.IForm;
+import net.onixary.shapeShifterCurseFabric.player_form.ISubForm;
+import net.onixary.shapeShifterCurseFabric.player_form.RegPlayerForms;
+import net.onixary.shapeShifterCurseFabric.player_form.utils.FormUtils;
+import net.onixary.shapeShifterCurseFabric.util.ClientUtils;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import java.util.function.BiPredicate;
+import java.util.function.Function;
+
+
+public class FormArgumentType implements ArgumentType<ResourceLocation> {
+    public static final HashMap<ResourceLocation, Function<@Nullable Player, @NotNull List<ResourceLocation>>> SUGGESTIONS_PROVIDERS_REGISTRY = new HashMap<>();
+
+    public static @NotNull ResourceLocation registerSuggestionsProvider(@NotNull ResourceLocation id, @NotNull Function<@Nullable Player, @NotNull List<ResourceLocation>> suggestionsProvider) {
+        SUGGESTIONS_PROVIDERS_REGISTRY.put(id, suggestionsProvider);
+        return id;
+    }
+
+    public static @Nullable Function<@Nullable Player, @NotNull List<ResourceLocation>> getRegisteredSuggestionsProvider(@Nullable ResourceLocation id) {
+        return SUGGESTIONS_PROVIDERS_REGISTRY.get(id);
+    }
+
+    public static Function<@Nullable Player, @NotNull List<ResourceLocation>> buildSuggestionsProvider(BiPredicate<@Nullable Player, @NotNull IForm> filter) {
+        return player -> {
+            List<ResourceLocation> availableForms = new ArrayList<>();
+            RegPlayerForms.playerForms.forEach((formID, form) -> {
+                if (filter.test(player, form)) {
+                    availableForms.add(form.getFormID());
+                }
+            });
+            return availableForms;
+        };
+    }
+
+    public static final BiPredicate<@Nullable Player, @NotNull IForm> NonDynamicForms = (player, form) -> !form.isDynamicForm();
+    public static final BiPredicate<@Nullable Player, @NotNull IForm> DynamicForms = (player, form) -> form.isDynamicForm();
+    public static final BiPredicate<@Nullable Player, @NotNull IForm> NonSubForms = (player, form) -> !(form instanceof ISubForm subForm && subForm.isSubForm());
+    public static final BiPredicate<@Nullable Player, @NotNull IForm> SubForms = (player, form) -> (form instanceof ISubForm subForm && subForm.isSubForm());
+    public static final BiPredicate<@Nullable Player, @NotNull IForm> UsableForms = FormUtils::isFormCanUse;
+    public static final ResourceLocation ALL_FORM_ARG = registerSuggestionsProvider(ShapeShifterCurseFabric.identifier("all_form_arg"), buildSuggestionsProvider(((player, form) -> true)));
+    public static final ResourceLocation SET_FORM_ARG = registerSuggestionsProvider(ShapeShifterCurseFabric.identifier("set_form_arg"), buildSuggestionsProvider(NonDynamicForms.and(NonSubForms)));
+    public static final ResourceLocation SET_DYNAMIC_FORM_ARG = registerSuggestionsProvider(ShapeShifterCurseFabric.identifier("set_dynamic_form_arg"), buildSuggestionsProvider(DynamicForms.and(NonSubForms)));
+    public static final ResourceLocation SET_SUB_FORM_ARG = registerSuggestionsProvider(ShapeShifterCurseFabric.identifier("set_sub_form_arg"), buildSuggestionsProvider(SubForms.and(UsableForms)));
+
+    private final ResourceLocation suggestionsProvider;
+
+    public FormArgumentType(ResourceLocation suggestionsProvider) {
+        this.suggestionsProvider = suggestionsProvider;
+    }
+
+    public static final DynamicCommandExceptionType FORM_NOT_FOUND = new DynamicCommandExceptionType(
+        o -> Component.translatable("commands.shape-shifter-curse.form_not_found", o)
+    );
+
+    public ResourceLocation parse(StringReader stringReader) throws CommandSyntaxException {
+       return ResourceLocation.read(stringReader);
+    }
+
+    public static IForm getForm(CommandContext<CommandSourceStack> context, String argumentName) throws CommandSyntaxException {
+
+       ResourceLocation id = context.getArgument(argumentName, ResourceLocation.class);
+
+       try {
+             return RegPlayerForms.playerForms.get(id);
+       }
+
+       catch(IllegalArgumentException e) {
+          throw FORM_NOT_FOUND.create(id);
+       }
+
+    }
+
+    @Override
+    public <S> CompletableFuture<Suggestions> listSuggestions(CommandContext<S> context, SuggestionsBuilder builder) {
+
+       List<ResourceLocation> availableForms = new ArrayList<>();
+
+       try {
+           if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
+               Player player = ClientUtils.getPlayer();
+               Function<@Nullable Player, @NotNull List<ResourceLocation>> suggestionsProviderFunc = getRegisteredSuggestionsProvider(suggestionsProvider);
+               if (suggestionsProviderFunc != null) {
+                   availableForms = suggestionsProviderFunc.apply(player);
+               }
+           }
+       }
+       catch(IllegalArgumentException ignored) {}
+       return SharedSuggestionProvider.suggestResource(availableForms.stream(), builder);
+    }
+
+    public static class Form_ArgumentType_Serializer implements ArgumentTypeInfo<FormArgumentType, FormArgumentType.Form_ArgumentType_Serializer.Form_ArgumentType_Properties> {
+
+        @Override
+        public void serializeToNetwork(Form_ArgumentType_Properties properties, FriendlyByteBuf buf) {
+            buf.writeResourceLocation(properties.data);
+        }
+
+        @Override
+        public @NotNull Form_ArgumentType_Properties deserializeFromNetwork(FriendlyByteBuf buf) {
+            return new Form_ArgumentType_Properties(this, buf.readResourceLocation());
+        }
+
+        @Override
+        public void serializeToJson(Form_ArgumentType_Properties properties, JsonObject json) {
+            json.addProperty("data", properties.data.toString());
+        }
+
+        @Override
+        public @NotNull Form_ArgumentType_Properties unpack(FormArgumentType argumentType) {
+            return new Form_ArgumentType_Properties(this, argumentType.suggestionsProvider);
+        }
+
+        public class Form_ArgumentType_Properties implements ArgumentTypeInfo.Template<FormArgumentType> {
+            final ResourceLocation data;
+
+            public Form_ArgumentType_Properties(Form_ArgumentType_Serializer ArgumentSerializer, ResourceLocation data) {
+                this.data = data;
+            }
+
+            public @NotNull FormArgumentType instantiate(CommandBuildContext commandRegistryAccess) {
+                return new FormArgumentType(data);
+            }
+
+            public @NotNull ArgumentTypeInfo<FormArgumentType, ?> type() {
+                return Form_ArgumentType_Serializer.this;
+            }
+        }
+    }
+}

@@ -1,0 +1,26 @@
+{
+    "type": "apoli:climbing",
+    "condition": {
+        "type": "apoli:and",
+        "conditions": [
+            {
+                "type": "apoli:collided_horizontally"
+            },
+            {
+                "type": "apoli:or",
+                "conditions": [
+                    {
+                        "type": "apoli:block_collision",
+                        "offset_x": 0.1,
+                        "offset_z": 0.1
+                    },
+                    {
+                        "type": "apoli:block_collision",
+                        "offset_x": -0.1,
+                        "offset_z": -0.1
+                    }
+                ]
+            }
+        ]
+    }
+}

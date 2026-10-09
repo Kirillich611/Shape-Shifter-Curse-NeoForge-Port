@@ -1,0 +1,50 @@
+package net.onixary.shapeShifterCurseFabric.player_form.forms;
+
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
+import net.onixary.shapeShifterCurseFabric.ShapeShifterCurseFabric;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AbstractAnimStateController;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AnimStateControllerDP.RideAnimController;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AnimStateControllerDP.SneakRushAnimController;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AnimStateEnum;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AnimSystem;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AnimUtils;
+import net.onixary.shapeShifterCurseFabric.player_form.NormalForm;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+public class Form_Ocelot3 extends NormalForm {
+    public Form_Ocelot3(ResourceLocation formID) {
+        super(formID);
+    }
+
+    private static final AnimUtils.AnimationHolderData ANIM_RUN = new AnimUtils.AnimationHolderData(ShapeShifterCurseFabric.identifier("form_feral_common_run"), 3.3f);
+    private static final AnimUtils.AnimationHolderData ANIM_SNEAK_RUSH = new AnimUtils.AnimationHolderData(ShapeShifterCurseFabric.identifier("form_feral_common_run"), 3.3f);
+
+    public static final AbstractAnimStateController WALK_CONTROLLER_SNEAK_RUSH = new SneakRushAnimController(Form_FeralBase.ANIM_WALK, Form_FeralBase.ANIM_SNEAK_WALK, ANIM_SNEAK_RUSH);
+    public static final AbstractAnimStateController SPRINT_CONTROLLER_SNEAK_RUSH = new SneakRushAnimController(ANIM_RUN, Form_FeralBase.ANIM_SNEAK_WALK, ANIM_SNEAK_RUSH);
+    public static final AbstractAnimStateController RIDE_CONTROLLER = new RideAnimController(new AnimUtils.AnimationHolderData(ShapeShifterCurseFabric.identifier("ocelot_3_riding")), new AnimUtils.AnimationHolderData(ShapeShifterCurseFabric.identifier("form_feral_common_sneak_idle")));
+
+    public @Nullable AbstractAnimStateController getAnimStateController(Player player, AnimSystem.AnimSystemData animSystemData, @NotNull ResourceLocation animStateID) {
+        @Nullable AnimStateEnum animStateEnum = AnimStateEnum.getStateEnum(animStateID);
+        if (animStateEnum != null) {
+            return switch (animStateEnum) {
+                case ANIM_STATE_SLEEP -> Form_FeralBase.SLEEP_CONTROLLER;
+                case ANIM_STATE_CLIMB -> Form_FeralBase.CLIMB_CONTROLLER;
+                case ANIM_STATE_FALL -> Form_FeralBase.FALL_CONTROLLER;
+                case ANIM_STATE_JUMP -> Form_FeralBase.JUMP_CONTROLLER;
+                case ANIM_STATE_RIDE -> RIDE_CONTROLLER;
+                case ANIM_STATE_SWIM -> Form_FeralBase.SWIM_CONTROLLER;
+                case ANIM_STATE_USE_ITEM -> Form_FeralBase.USE_ITEM_CONTROLLER;
+                case ANIM_STATE_WALK -> WALK_CONTROLLER_SNEAK_RUSH;
+                case ANIM_STATE_SPRINT -> SPRINT_CONTROLLER_SNEAK_RUSH;
+                case ANIM_STATE_IDLE -> Form_FeralBase.IDLE_CONTROLLER;
+                case ANIM_STATE_MINING -> Form_FeralBase.MINING_CONTROLLER;
+                case ANIM_STATE_ATTACK -> Form_FeralBase.ATTACK_CONTROLLER;
+                case ANIM_STATE_FLYING, ANIM_STATE_FALL_FLYING -> Form_FeralBase.FALL_FLYING_CONTROLLER;
+                default -> Form_FeralBase.IDLE_CONTROLLER;
+            };
+        }
+        return super.getAnimStateController(player, animSystemData, animStateID);
+    }
+}

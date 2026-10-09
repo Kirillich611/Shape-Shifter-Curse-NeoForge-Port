@@ -1,0 +1,7 @@
+{
+  "type": "apoli:night_vision",
+  "strength": 1.0,
+  "condition": {
+    "type": "shape-shifter-curse:is_submerged_fix"
+  }
+}

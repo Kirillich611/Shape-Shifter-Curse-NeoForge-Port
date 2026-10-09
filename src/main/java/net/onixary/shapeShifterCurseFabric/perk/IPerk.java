@@ -1,0 +1,31 @@
+package net.onixary.shapeShifterCurseFabric.perk;
+
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
+import net.onixary.shapeShifterCurseFabric.player_form.IForm;
+
+// Server Side
+public interface IPerk {
+    ResourceLocation getID();
+
+    default boolean canRepeat() {  // 可重复升级
+        return false;
+    }
+
+    default void onGain(Player player, IForm form) {
+        if (!canRepeat()) {
+            this.onLoad(player, form);
+        }
+    }
+
+    default boolean canGain(Player player, IForm form) {
+        return true;  // Tier 和 DependentPerkID 的判定由 PerkTree 处理
+    }
+
+    default void onLoad(Player player, IForm form) { }
+
+    // 非动态数据 仅在开UI时同步
+    default int getXpCost() {
+        return 0;
+    }
+}

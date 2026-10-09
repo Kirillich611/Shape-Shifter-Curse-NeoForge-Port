@@ -1,0 +1,152 @@
+package net.onixary.shapeShifterCurseFabric.mixin.plugin;
+
+import net.fabricmc.loader.api.FabricLoader;
+import net.onixary.shapeShifterCurseFabric.util.Accessory.AccessoryPriorityUtils;
+import org.objectweb.asm.tree.ClassNode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import org.spongepowered.asm.mixin.extensibility.IMixinConfigPlugin;
+import org.spongepowered.asm.mixin.extensibility.IMixinInfo;
+
+import java.util.HashMap;
+import java.util.List;
+import java.util.Objects;
+import java.util.Set;
+
+public class MixinConfigPlugin implements IMixinConfigPlugin {
+    public static final Logger LOGGER = LoggerFactory.getLogger("shape-shifter-curse-mixin");
+
+    private record MixinRequiredMods(String[] value, String[] not) { }
+    private static final HashMap<String, MixinRequiredMods> mixinRequiredMods = new HashMap<>();
+
+    private static final HashMap<String, String> mixinAccessoryMixin = new HashMap<>();
+
+    static {
+        mixinRequiredMods.put("net.onixary.shapeShifterCurseFabric.mixin.PlayerEntityRendererFallFlyingMixin", new MixinRequiredMods(new String[]{}, new String[]{"vivecraft"}));
+        mixinRequiredMods.put("net.onixary.shapeShifterCurseFabric.mixin.integration.AppleSkin", new MixinRequiredMods(new String[]{"appleskin"}, new String[]{}));
+        mixinRequiredMods.put("net.onixary.shapeShifterCurseFabric.mixin.integration.TacZ_Anim", new MixinRequiredMods(new String[]{"tacz"}, new String[]{}));
+        mixinRequiredMods.put("net.onixary.shapeShifterCurseFabric.mixin.integration.TacZ_AnimThird", new MixinRequiredMods(new String[]{"tacz"}, new String[]{}));
+        mixinRequiredMods.put("net.onixary.shapeShifterCurseFabric.mixin.integration.PresenceFootstepsStepSpeedMixin", new MixinRequiredMods(new String[]{"presencefootsteps"}, new String[]{}));
+        mixinRequiredMods.put("net.onixary.shapeShifterCurseFabric.mixin.integration.ToughAsNailsDrinkInWorldPacketMixin", new MixinRequiredMods(new String[]{"toughasnails"}, new String[]{}));
+        mixinRequiredMods.put("net.onixary.shapeShifterCurseFabric.mixin.integration.ToughAsNailsTemperatureHelperImplMixin", new MixinRequiredMods(new String[]{"toughasnails"}, new String[]{}));
+        mixinRequiredMods.put("net.onixary.shapeShifterCurseFabric.mixin.integration.ToughAsNailsThirstHandlerMixin", new MixinRequiredMods(new String[]{"toughasnails"}, new String[]{}));
+        mixinRequiredMods.put("net.onixary.shapeShifterCurseFabric.mixin.integration.ToughAsNailsThirstHooksMixin", new MixinRequiredMods(new String[]{"toughasnails"}, new String[]{}));
+        mixinRequiredMods.put("net.onixary.shapeShifterCurseFabric.mixin.accessory.TrinketImpl", new MixinRequiredMods(new String[]{"trinkets"}, new String[]{}));
+        mixinRequiredMods.put("net.onixary.shapeShifterCurseFabric.mixin.accessory.TrinketItemMixin", new MixinRequiredMods(new String[]{"trinkets"}, new String[]{}));
+        mixinRequiredMods.put("net.onixary.shapeShifterCurseFabric.mixin.accessory.TrinketSlotMixin", new MixinRequiredMods(new String[]{"trinkets"}, new String[]{}));
+        mixinRequiredMods.put("net.onixary.shapeShifterCurseFabric.mixin.forge.CurioImpl", new MixinRequiredMods(new String[]{"curios"}, new String[]{}));
+        mixinRequiredMods.put("net.onixary.shapeShifterCurseFabric.mixin.forge.CurioItemImpl", new MixinRequiredMods(new String[]{"curios"}, new String[]{}));
+        mixinRequiredMods.put("net.onixary.shapeShifterCurseFabric.mixin.forge.CurioUtilsImpl", new MixinRequiredMods(new String[]{"curios"}, new String[]{}));
+        mixinRequiredMods.put("net.onixary.shapeShifterCurseFabric.mixin.integration.BOP_WebbingBlockMixin", new MixinRequiredMods(new String[]{"biomesoplenty"}, new String[]{}));
+        mixinRequiredMods.put("net.onixary.shapeShifterCurseFabric.mixin.integration.LodeStoneIntegrationMixin", new MixinRequiredMods(new String[]{"lodestone"}, new String[]{}));
+
+        mixinAccessoryMixin.put("net.onixary.shapeShifterCurseFabric.mixin.accessory.TrinketImpl", "trinkets");
+        mixinAccessoryMixin.put("net.onixary.shapeShifterCurseFabric.mixin.forge.CurioImpl", "curios");
+    }
+
+    private boolean isNeoForge = false;
+
+    @Override
+    public void onLoad(String mixinPackage) {
+        // Sinytra Connector 检测：NeoForge 下禁用依赖 Fabric 版依赖 mod API 的 integration mixin
+        isNeoForge = isConnectorLoaded();
+    }
+
+    private boolean isConnectorLoaded() {
+        try {
+            if (FabricLoader.getInstance().isModLoaded("connector")) {
+                return true;
+            }
+        } catch (Throwable ignored) {
+        }
+        try {
+            Class<?> modListClass;
+            try {
+                modListClass = Class.forName("net.neoforged.fml.loading.moddiscovery.ModList");
+            } catch (ClassNotFoundException cnfe) {
+                modListClass = Class.forName("net.minecraftforge.fml.loading.moddiscovery.ModList");
+            }
+            Object modList = modListClass.getMethod("get").invoke(null);
+            return (Boolean) modListClass.getMethod("isLoaded", String.class).invoke(modList, "connector");
+        } catch (Throwable ignored) {
+        }
+        return false;
+    }
+
+    // NeoForge 下禁用的 mixin：依赖 Fabric 版依赖 mod 的 API。如 AppleSkin 的
+    // FoodHelper.getDefaultFoodValues，Fabric 版签名 (ItemStack)，NeoForge 版是 (ItemStack, Player)，
+    // 注入点失效会崩服。NeoForge 下禁用（集成功能降级）。
+    private static final List<String> neoForgeDisabledMixins = List.of(
+            "net.onixary.shapeShifterCurseFabric.mixin.integration.AppleSkin"
+    );
+
+    @Override
+    public String getRefMapperConfig() {
+        return null;
+    }
+
+    @Override
+    public boolean shouldApplyMixin(String targetClassName, String mixinClassName) {
+        if (mixinClassName.endsWith("NeoForgeVerticalWaterMovementMixin")) return isNeoForge;
+        if (mixinClassName.endsWith("NeoForgePlayerCriticalMixin")) return isNeoForge;
+        if (mixinClassName.endsWith(".PlayerCriticalMixin")) return !isNeoForge;
+        // NeoForge 下禁用依赖 Fabric 版 API 的 integration mixin
+        if (isNeoForge && neoForgeDisabledMixins.stream().anyMatch(mixinClassName::contains)) {
+            LOGGER.info("NeoForge detected, skipping {} (NeoForge 版依赖 mod API 不同)", mixinClassName);
+            return false;
+        }
+        // 原先的代码 使用硬编码的方式
+        // 检查是否为 PlayerEntityRendererFallFlyingMixin
+        // if (mixinClassName.endsWith("PlayerEntityRendererFallFlyingMixin")) {
+        //     boolean isViveCraftLoaded = FabricLoader.getInstance().isModLoaded("vivecraft");
+        //     if (isViveCraftLoaded) {
+        //         System.out.println("[ShapeShifterCurse] ViveCraft detected, skipping PlayerEntityRendererFallFlyingMixin");
+        //         return false; // 完全跳过这个 mixin
+        //     }
+        // }
+
+        // 检查是否符合MixinRequiredMods注解的要求 注解会导致Mixin提前加载 临时使用static注册
+        if (mixinRequiredMods.containsKey(mixinClassName)) {
+            MixinRequiredMods requiredMods = mixinRequiredMods.get(mixinClassName);
+            for (String mod : requiredMods.value) {
+                if (!FabricLoader.getInstance().isModLoaded(mod)) {
+                    LOGGER.info("{} not detected, skipping {}", mod, mixinClassName);
+                    return false; // 完全跳过这个 mixin
+                }
+            }
+            for (String mod : requiredMods.not) {
+                if (FabricLoader.getInstance().isModLoaded(mod)) {
+                    LOGGER.info("{} detected, skipping {}", mod, mixinClassName);
+                    return false; // 完全跳过这个 mixin
+                }
+            }
+        }
+        if (mixinAccessoryMixin.containsKey(mixinClassName)) {
+            if (!Objects.equals(AccessoryPriorityUtils.getHighestPriorityPlugin(), mixinAccessoryMixin.get(mixinClassName))) {
+                LOGGER.info("{} is highest priority, skipping {}", AccessoryPriorityUtils.getHighestPriorityPlugin(), mixinClassName);
+                return false;
+            }
+        }
+        return true;
+    }
+
+    @Override
+    public void acceptTargets(Set<String> myTargets, Set<String> otherTargets) {
+        // 不需要特殊处理
+    }
+
+    @Override
+    public List<String> getMixins() {
+        return null;
+    }
+
+    @Override
+    public void preApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
+        // 应用前处理（可选）
+    }
+
+    @Override
+    public void postApply(String targetClassName, ClassNode targetClass, String mixinClassName, IMixinInfo mixinInfo) {
+        // 应用后处理（可选）
+    }
+}

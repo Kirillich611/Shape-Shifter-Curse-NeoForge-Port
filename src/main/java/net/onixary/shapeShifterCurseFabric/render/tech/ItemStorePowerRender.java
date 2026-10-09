@@ -1,0 +1,106 @@
+package net.onixary.shapeShifterCurseFabric.render.tech;
+
+import com.mojang.blaze3d.systems.RenderSystem;
+import io.github.apace100.apoli.component.PowerHolderComponent;
+import io.github.apace100.apoli.power.Power;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.Tuple;
+import net.minecraft.world.item.ItemStack;
+import net.onixary.shapeShifterCurseFabric.ShapeShifterCurseFabric;
+import net.onixary.shapeShifterCurseFabric.util.UIPositionUtils;
+
+import java.util.ArrayList;
+import java.util.List;
+
+public class ItemStorePowerRender {
+    private static final ResourceLocation WIDGETS_TEXTURE = ResourceLocation.parse("textures/gui/sprites/hud/hotbar_offhand_left.png");
+
+    public static interface itemStorePowerRenderInterface {
+        public int getSlot();
+        public ItemStack getStack();
+        public default float getBobbingAnimationTime() {
+            return 0;
+        }
+    }
+
+    private static final Minecraft mc = Minecraft.getInstance();
+    private static final List<itemStorePowerRenderInterface> tempPower = new ArrayList<>();
+    private static int timer = 0;
+    private static final int MaxSlot = 12;
+    private static final int SlotPerRow = 4;
+    private static int NowCol = 0;
+    private static int NowRow = 0;
+
+    static {
+        for (int i = 0; i < MaxSlot; i++) {
+            tempPower.add(null);
+        }
+    }
+
+    private static void timerTick() {
+        if (mc.player == null) {
+            return;
+        }
+        if (timer > 60) {
+            timer = 0;
+            NowCol = 0;
+            NowRow = 0;
+            for (int i = 0; i < MaxSlot; i++) {
+                tempPower.set(i, null);
+            }
+            for(Power power : PowerHolderComponent.KEY.get(mc.player).getPowers()) {
+                if(itemStorePowerRenderInterface.class.isAssignableFrom(power.getClass()) && power.isActive()) {
+                    itemStorePowerRenderInterface trueR = (itemStorePowerRenderInterface) power;
+                    tempPower.set(trueR.getSlot(), trueR);
+                    NowCol = Math.max(NowCol, (trueR.getSlot() % SlotPerRow) + 1);
+                    NowRow = Math.max(NowRow, (trueR.getSlot() / SlotPerRow) + 1);
+                }
+            }
+        }
+        timer++;
+    }
+
+    private static void renderSlot(GuiGraphics context, float tickDelta, itemStorePowerRenderInterface power) {
+        Tuple<Integer, Integer> SlotBegin = UIPositionUtils.getCorrectPosition(ShapeShifterCurseFabric.clientConfig.itemStorePowerPosType, ShapeShifterCurseFabric.clientConfig.itemStorePowerPosOffsetX - (NowCol * 20), ShapeShifterCurseFabric.clientConfig.itemStorePowerPosOffsetY - (NowRow * 20));
+        int SlotX = power.getSlot() % SlotPerRow;
+        int SlotY = power.getSlot() / SlotPerRow;
+        int SlotXFinal = SlotBegin.getA() + SlotX;
+        int SlotYFinal = SlotBegin.getB() + SlotY;
+        context.pose().pushPose();
+        context.pose().translate(0.0f, 0.0f, -90.0f);
+        context.blit(WIDGETS_TEXTURE, SlotXFinal - 2, SlotYFinal - 4, 0, 1, 22, 22, 29, 24);
+        context.pose().popPose();
+        ItemStack stack = power.getStack();
+        if (stack.isEmpty()) {
+            return;
+        }
+        float g = power.getBobbingAnimationTime() - tickDelta;
+        if (g > 0.0f) {
+            float h = 1.0f + g / 5.0f;
+            context.pose().pushPose();
+            context.pose().translate(SlotXFinal + 8, SlotYFinal + 12, 0.0f);
+            context.pose().scale(1.0f / h, (h + 1.0f) / 2.0f, 1.0f);
+            context.pose().translate(-(SlotXFinal + 8), -(SlotYFinal + 12), 0.0f);
+        }
+        context.renderItem(mc.player, stack, SlotXFinal, SlotYFinal, power.getSlot());
+        if (g > 0.0f) {
+            context.pose().popPose();
+        }
+        context.renderItemDecorations(mc.font, stack, SlotXFinal, SlotYFinal);
+    }
+
+    public static void render(GuiGraphics context, float tickDelta) {
+        timerTick();
+        if (!mc.options.hideGui) {
+            RenderSystem.enableBlend();
+            for (itemStorePowerRenderInterface power : tempPower) {
+                if (power != null) {
+                    renderSlot(context, tickDelta, power);
+                }
+            }
+            RenderSystem.disableBlend();
+        }
+    }
+}

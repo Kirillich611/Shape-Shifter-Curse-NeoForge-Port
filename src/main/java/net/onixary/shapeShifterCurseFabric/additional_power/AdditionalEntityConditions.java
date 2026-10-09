@@ -1,0 +1,127 @@
+package net.onixary.shapeShifterCurseFabric.additional_power;
+
+import io.github.apace100.apoli.data.ApoliDataTypes;
+import io.github.apace100.apoli.power.factory.condition.ConditionFactory;
+import io.github.apace100.apoli.registry.ApoliRegistries;
+import io.github.apace100.apoli.util.Comparison;
+import io.github.apace100.calio.data.SerializableData;
+import io.github.apace100.calio.data.SerializableDataTypes;
+import net.fabricmc.api.EnvType;
+import net.fabricmc.loader.api.FabricLoader;
+import net.minecraft.core.Registry;
+import net.minecraft.tags.FluidTags;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.player.Player;
+import net.onixary.shapeShifterCurseFabric.ShapeShifterCurseFabric;
+import net.onixary.shapeShifterCurseFabric.player_form.skin.PlayerSkinComponent;
+import net.onixary.shapeShifterCurseFabric.player_form.skin.RegPlayerSkinComponent;
+import net.onixary.shapeShifterCurseFabric.util.AttackEntityDataTracker;
+import net.onixary.shapeShifterCurseFabric.util.ClientUtils;
+
+public class AdditionalEntityConditions {
+    public static void register() {
+        register(DiggingBareHandCondition.getFactory());
+        register(InstinctValueCondition.getFactory());
+        register(ChanceCondition.getFactory());
+        register(JumpEventCondition.getFactory());
+        register(MustCrawlingCondition.getFactory());
+        register(new ConditionFactory<>(ShapeShifterCurseFabric.identifier("rising"),
+                new SerializableData(), (data, entity) ->
+                    entity.getDeltaMovement().y > 0.001 || entity.getY() > entity.yo + 0.001));
+        register(IdleStayCondition.getFactory());
+        IdleStayCondition.init();
+        TrinketsConditionAction.registerCondition(AdditionalEntityConditions::register);
+        ManaUtilsApoli.registerCondition(AdditionalEntityConditions::register);
+
+        register(new ConditionFactory<>(
+                ShapeShifterCurseFabric.identifier("can_render_gui"),
+                new SerializableData(),
+                (data, e) -> {
+                    if (FabricLoader.getInstance().getEnvironmentType() == EnvType.CLIENT) {
+                        return ClientUtils.CanDisplayGUI();
+                    }
+                    return true;
+                }
+        ));
+
+        register(new ConditionFactory<>(
+                ShapeShifterCurseFabric.identifier("enable_random_sound"),
+                new SerializableData(),
+                (data, e) -> {
+                    if (e instanceof Player player) {
+                        PlayerSkinComponent skinComponent = RegPlayerSkinComponent.SKIN_SETTINGS.get(e);
+                        return skinComponent.isEnableFormRandomSound();
+                    }
+                    return true;
+                }
+        ));
+
+        register(new ConditionFactory<>(
+                ShapeShifterCurseFabric.identifier("last_attack_witch_time"),
+                new SerializableData()
+                        .add("comparison", ApoliDataTypes.COMPARISON)
+                        .add("compare_to", SerializableDataTypes.INT, 0),
+                (data, e) -> {
+                    if (e instanceof Player player) {
+                        long lastAttackTime = AttackEntityDataTracker.lastAttackWitchTimeMap.getOrDefault(player.getUUID(), Long.MIN_VALUE / 16);
+                        long trueLastAttackTime = player.level().getGameTime() - lastAttackTime;
+                        Comparison comparison = (Comparison) data.get("comparison");
+                        if (comparison == null) {
+                            return false;
+                        }
+                        return comparison.compare(trueLastAttackTime, (int) data.get("compare_to"));
+                    }
+                    return false;
+                }
+        ));
+
+        register(new ConditionFactory<>(
+                ShapeShifterCurseFabric.identifier("last_attack_pillager_time"),
+                new SerializableData()
+                        .add("comparison", ApoliDataTypes.COMPARISON)
+                        .add("compare_to", SerializableDataTypes.INT, 0),
+                (data, e) -> {
+                    if (e instanceof Player player) {
+                        long lastAttackTime = AttackEntityDataTracker.lastAttackPillagerTimeMap.getOrDefault(player.getUUID(), Long.MIN_VALUE / 16);
+                        long trueLastAttackTime = player.level().getGameTime() - lastAttackTime;
+                        Comparison comparison = (Comparison) data.get("comparison");
+                        if (comparison == null) {
+                            return false;
+                        }
+                        return comparison.compare(trueLastAttackTime, (int) data.get("compare_to"));
+                    }
+                    return false;
+                }
+        ));
+
+        register(new ConditionFactory<>(
+                ShapeShifterCurseFabric.identifier("is_sleep"),
+                new SerializableData(),
+                (data, e) -> {
+                    if (e instanceof Player player) {
+                        return player.isSleeping();
+                    }
+                    return false;
+                }
+        ));
+
+        register(new ConditionFactory<>(
+                ShapeShifterCurseFabric.identifier("is_in_water_fix"),
+                new SerializableData(),
+                (data, e) -> e.isInWater() || e.isUnderWater() || e.getFluidHeight(FluidTags.WATER) > 0.0f
+        ));
+
+        register(new ConditionFactory<>(
+                ShapeShifterCurseFabric.identifier("is_submerged_fix"),
+                new SerializableData(),
+                (data, e) -> e.isEyeInFluid(FluidTags.WATER)
+        ));
+
+        ItemStorePower.registerCondition(AdditionalEntityConditions::register);
+        ItemCooldownCA.registerCondition(AdditionalEntityConditions::register);
+    }
+
+    private static void register(ConditionFactory<Entity> conditionFactory) {
+        Registry.register(ApoliRegistries.ENTITY_CONDITION, conditionFactory.getSerializerId(), conditionFactory);
+    }
+}

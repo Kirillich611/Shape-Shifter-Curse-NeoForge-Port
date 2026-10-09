@@ -1,0 +1,108 @@
+package net.onixary.shapeShifterCurseFabric.player_form.forms;
+
+import net.minecraft.client.player.AbstractClientPlayer;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.Tuple;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.phys.Vec3;
+import net.onixary.shapeShifterCurseFabric.ShapeShifterCurseFabric;
+import net.onixary.shapeShifterCurseFabric.player_animation.AnimationHolder;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.*;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AnimStateControllerDP.ClimbAnimController;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AnimStateControllerDP.OneAnimController;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AnimStateControllerDP.RideAnimController;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AnimStateControllerDP.WithSneakAnimController;
+import net.onixary.shapeShifterCurseFabric.player_form.NormalForm;
+import net.onixary.shapeShifterCurseFabric.player_form.utils.ModifyCapeRender;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+
+public class Form_Bat3 extends NormalForm implements ModifyCapeRender {
+    public Form_Bat3(ResourceLocation formID) {
+        super(formID);
+    }
+
+    @Override
+    public Vec3 getCapeIdleLoc(AbstractClientPlayer player) {
+        if (player.onGround()) {
+            return new Vec3(0.0f, 0.7f, 0.2f);
+        }
+        else {
+            return new Vec3(0.0, 0.0, 0.125);
+        }
+    }
+
+    @Override
+    public float getCapeBaseRotateAngle(AbstractClientPlayer player) {
+        return 100.0f;
+    }
+
+    @Override
+    public boolean NeedModifyXRotationAngle() {
+        return true;
+    }
+
+    public static final AnimUtils.AnimationHolderData ANIM_CLIMB =
+            new AnimUtils.AnimationHolderData(ShapeShifterCurseFabric.identifier("bat_3_climb"), 1.25f, 2);
+    public static final AnimUtils.AnimationHolderData ANIM_CLIMB_IDLE =
+            new AnimUtils.AnimationHolderData(ShapeShifterCurseFabric.identifier("bat_3_attach_side"));
+    public static final AnimUtils.AnimationHolderData ANIM_SLEEP = new AnimUtils.AnimationHolderData(ShapeShifterCurseFabric.identifier("bat_3_sleep"));
+
+    public static final AbstractAnimStateController IDLE_CONTROLLER = new WithSneakAnimController(new AnimUtils.AnimationHolderData(ShapeShifterCurseFabric.identifier("bat_3_idle")), new AnimUtils.AnimationHolderData(ShapeShifterCurseFabric.identifier("bat_1_sneak_idle")));
+    public static final AbstractAnimStateController WALK_CONTROLLER = new WithSneakAnimController(new AnimUtils.AnimationHolderData(ShapeShifterCurseFabric.identifier("bat_3_walk"), 1.7f, 4), new AnimUtils.AnimationHolderData(ShapeShifterCurseFabric.identifier("bat_3_sneak_walk")));
+    public static final AbstractAnimStateController SPRINT_CONTROLLER = new WithSneakAnimController(new AnimUtils.AnimationHolderData(ShapeShifterCurseFabric.identifier("bat_3_walk"), 2.4f, 4), new AnimUtils.AnimationHolderData(ShapeShifterCurseFabric.identifier("bat_3_sneak_walk")));
+    public static final AbstractAnimStateController MINING_CONTROLLER = new OneAnimController(new AnimUtils.AnimationHolderData(ShapeShifterCurseFabric.identifier("bat_3_digging"), 1.5f, 2));
+    public static final AbstractAnimStateController ATTACK_CONTROLLER = new OneAnimController(new AnimUtils.AnimationHolderData(ShapeShifterCurseFabric.identifier("bat_3_attack"), 1.5f, 2));
+    public static final AbstractAnimStateController JUMP_CONTROLLER = new OneAnimController(new AnimUtils.AnimationHolderData(ShapeShifterCurseFabric.identifier("bat_3_jump"), 1.5f, 2));
+    public static final AbstractAnimStateController FALL_CONTROLLER = new OneAnimController(new AnimUtils.AnimationHolderData(ShapeShifterCurseFabric.identifier("bat_2_slow_falling")));
+    public static final AbstractAnimStateController RIDE_CONTROLLER = new RideAnimController(new AnimUtils.AnimationHolderData(ShapeShifterCurseFabric.identifier("bat_3_riding")), new AnimUtils.AnimationHolderData(ShapeShifterCurseFabric.identifier("bat_1_sneak_idle")));
+    public static final AbstractAnimStateController FLYING_CONTROLLER = new OneAnimController(new AnimUtils.AnimationHolderData(ShapeShifterCurseFabric.identifier("bat_2_slow_falling")));
+    public static final AbstractAnimStateController CLIMB_CONTROLLER = new ClimbAnimController(ANIM_CLIMB_IDLE, ANIM_CLIMB);
+    public static final AbstractAnimStateController SLEEP_CONTROLLER = new OneAnimController(ANIM_SLEEP);
+
+    public @Nullable AbstractAnimStateController getAnimStateController(Player player, AnimSystem.AnimSystemData animSystemData, @NotNull ResourceLocation animStateID) {
+        @Nullable AnimStateEnum animStateEnum = AnimStateEnum.getStateEnum(animStateID);
+        if (animStateEnum != null) {
+            return switch (animStateEnum) {
+                case ANIM_STATE_FALL -> FALL_CONTROLLER;
+                case ANIM_STATE_JUMP -> JUMP_CONTROLLER;
+                case ANIM_STATE_RIDE -> RIDE_CONTROLLER;
+                case ANIM_STATE_WALK -> WALK_CONTROLLER;
+                case ANIM_STATE_SPRINT -> SPRINT_CONTROLLER;
+                case ANIM_STATE_IDLE -> IDLE_CONTROLLER;
+                case ANIM_STATE_CLIMB -> CLIMB_CONTROLLER;
+                case ANIM_STATE_MINING -> MINING_CONTROLLER;
+                case ANIM_STATE_ATTACK -> ATTACK_CONTROLLER;
+                case ANIM_STATE_FLYING -> FLYING_CONTROLLER;
+                case ANIM_STATE_USE_ITEM -> IDLE_CONTROLLER;
+                case ANIM_STATE_SLEEP -> SLEEP_CONTROLLER;
+                case ANIM_STATE_CRAWL -> FLYING_CONTROLLER;
+                default -> null;
+            };
+        }
+        return super.getAnimStateController(player, animSystemData, animStateID);
+    }
+
+    // 虽然已经在AnimRegistries注册过默认值了 但是按照标准来说应该在这里注册 默认值仅为备用
+
+    private static AnimationHolder POWER_ANIM_ATTACH_SIDE = AnimationHolder.EMPTY;
+    private static AnimationHolder POWER_ANIM_ATTACH_BOTTOM = AnimationHolder.EMPTY;
+
+    @Override
+    public void registerPowerAnim(Player player, AnimSystem.AnimSystemData animSystemData) {
+        POWER_ANIM_ATTACH_SIDE = new AnimationHolder(ShapeShifterCurseFabric.identifier("bat_3_attach_side"), true);
+        POWER_ANIM_ATTACH_BOTTOM = new AnimationHolder(ShapeShifterCurseFabric.identifier("bat_3_attach_bottom"), true);
+        super.registerPowerAnim(player, animSystemData);
+    }
+
+    @Override
+    public @NotNull Tuple<Boolean, @Nullable AnimationHolder> getPowerAnim(Player player, AnimSystem.AnimSystemData animSystemData, @NotNull ResourceLocation powerAnimID) {
+        if (powerAnimID.equals(AnimRegistries.POWER_ANIM_ATTACH_SIDE)) {
+            return new Tuple<>(true, POWER_ANIM_ATTACH_SIDE);
+        } else if (powerAnimID.equals(AnimRegistries.POWER_ANIM_ATTACH_BOTTOM)) {
+            return new Tuple<>(true, POWER_ANIM_ATTACH_BOTTOM);
+        }
+        return super.getPowerAnim(player, animSystemData, powerAnimID);
+    }
+}

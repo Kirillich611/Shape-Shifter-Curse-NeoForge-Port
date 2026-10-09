@@ -1,0 +1,30 @@
+{
+  "type": "shape-shifter-curse:eat_entity",
+  "food_map": [
+    {
+      "entity": "minecraft:cod",
+      "food": {
+        "nutrition": 8,
+        "saturation": 0.8,
+        "can_always_eat": true,
+        "effects": [
+          {
+            "effect": {
+              "effect": "minecraft:regeneration",
+              "duration": 80,
+              "amplifier": 0,
+              "show_particles": false,
+              "show_icon": true
+            },
+            "probability": 1.0
+          }
+        ]
+      }
+    }
+  ],
+  "must_empty_hand": true,
+  "condition": {
+    "type": "apoli:sneaking",
+    "inverted": true
+  }
+}

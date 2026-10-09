@@ -1,0 +1,66 @@
+package net.onixary.shapeShifterCurseFabric.blocks;
+
+import net.fabricmc.fabric.api.blockrenderlayer.v1.BlockRenderLayerMap;
+import net.fabricmc.fabric.api.registry.FlammableBlockRegistry;
+import net.minecraft.client.renderer.RenderType;
+import net.minecraft.core.Registry;
+import net.minecraft.core.registries.BuiltInRegistries;
+import net.minecraft.world.item.BlockItem;
+import net.minecraft.world.item.Item;
+import net.minecraft.world.level.block.Block;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.SoundType;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.block.entity.BlockEntityType;
+import net.minecraft.world.level.block.state.BlockBehaviour;
+import net.minecraft.world.level.block.state.properties.NoteBlockInstrument;
+import net.minecraft.world.level.material.MapColor;
+import net.onixary.shapeShifterCurseFabric.ShapeShifterCurseFabric;
+import net.onixary.shapeShifterCurseFabric.blocks.block_entity.AltarBlockEntity;
+import net.onixary.shapeShifterCurseFabric.blocks.block_entity.FormAttunerBlockEntity;
+
+public final class RegCustomBlock {
+    // 用 ofFullCopy 而非 of()：前者会连 gravel 的掉落物/爆炸抗性等一并继承，后者只给一份空白属性。
+    // （合并上游时这行被改成了 of(Blocks.GRAVEL) —— 那是个不存在的重载 —— 后又降级成 of()，属性全丢。）
+    public static final Block MOONDUST_CRYSTAL_GRIT = register("moondust_crystal_grit", new Block(BlockBehaviour.Properties.ofFullCopy(Blocks.GRAVEL).mapColor(MapColor.COLOR_PURPLE).strength(0.6f, 0.6f).sound(SoundType.GRAVEL)));
+    // TODO TEMP_WEB_BRIDGE 仅在测试时有物品 发布时记得用 registerWithOutItem
+    public static final Block TEMP_WEB_BRIDGE = register("temp_web_bridge", new TempWebBridgeBlock(BlockBehaviour.Properties.of().mapColor(MapColor.WOOL).strength(4.0f).randomTicks().noCollission().dynamicShape().noLootTable().isRedstoneConductor(Blocks::never).ignitedByLava().sound(SoundType.WOOL)));
+
+    public static final Block WEB_COMPOSTER = register("web_composter", new WebComposterBlock(BlockBehaviour.Properties.of().mapColor(MapColor.PLANT).strength(0.6F).sound(SoundType.AZALEA).noOcclusion()));
+    public static final Block DEW_COVERED_COBWEB = register("dew_covered_cobweb", new DewCoveredCobwebBlock(BlockBehaviour.Properties.of().mapColor(MapColor.WOOL).instrument(NoteBlockInstrument.BELL).strength(1.0F).sound(SoundType.WOOL).noCollission().noOcclusion()));
+
+    public static final Block Altar_BLOCK = register("altar", new AltarBlock(BlockBehaviour.Properties.of().mapColor(MapColor.WOOL).instrument(NoteBlockInstrument.BELL).strength(4.0F, 10.0F).sound(SoundType.AMETHYST).noOcclusion()));
+    public static final BlockEntityType<AltarBlockEntity> Altar_BLOCK_ENTITY = registerBlockEntity("altar_block_entity", BlockEntityType.Builder.of(AltarBlockEntity::new, Altar_BLOCK).build(null));
+
+    public static final Block FORM_ATTUNER_BLOCK = register("form_attuner", new FormAttunerBlock(BlockBehaviour.Properties.of().mapColor(MapColor.WOOL).instrument(NoteBlockInstrument.BELL).lightLevel((state) -> 15).strength(4.0F, 10.0F).sound(SoundType.GLASS).noOcclusion()));
+    public static final BlockEntityType<FormAttunerBlockEntity> FORM_ATTUNER_BLOCK_ENTITY = registerBlockEntity("form_attuner_block_entity", BlockEntityType.Builder.of(FormAttunerBlockEntity::new, FORM_ATTUNER_BLOCK).build(null));
+
+    public static void ClientInit() {
+        // transparent透明模式不写Z，会出现自排序问题遮挡自己，只需要镂空的模型应该使用getCutout
+        BlockRenderLayerMap.INSTANCE.putBlock(TEMP_WEB_BRIDGE, RenderType.cutout());
+        BlockRenderLayerMap.INSTANCE.putBlock(WEB_COMPOSTER, RenderType.cutout());
+        BlockRenderLayerMap.INSTANCE.putBlock(DEW_COVERED_COBWEB, RenderType.cutout());
+        BlockRenderLayerMap.INSTANCE.putBlock(Altar_BLOCK, RenderType.cutout());
+        BlockRenderLayerMap.INSTANCE.putBlock(FORM_ATTUNER_BLOCK, RenderType.cutout());
+    }
+
+    private static <T extends Block> T registerWithOutItem(String path, T block) {
+        Registry.register(BuiltInRegistries.BLOCK, ShapeShifterCurseFabric.identifier(path), block);
+        return block;
+    }
+
+    private static <T extends Block> T register(String path, T block) {
+        Registry.register(BuiltInRegistries.BLOCK, ShapeShifterCurseFabric.identifier(path), block);
+        Registry.register(BuiltInRegistries.ITEM, ShapeShifterCurseFabric.identifier(path), new BlockItem(block, new Item.Properties()));
+        return block;
+    }
+
+    private static <T extends BlockEntity> BlockEntityType<T> registerBlockEntity(String path, BlockEntityType<T> blockEntityType) {
+        return Registry.register(BuiltInRegistries.BLOCK_ENTITY_TYPE, ShapeShifterCurseFabric.identifier(path), blockEntityType);
+    }
+
+    public static void initialize() {
+        // 蔓延速度=20, 燃烧速度=5，与木板相同
+        FlammableBlockRegistry.getDefaultInstance().add(TEMP_WEB_BRIDGE, 60, 20);
+    }
+}

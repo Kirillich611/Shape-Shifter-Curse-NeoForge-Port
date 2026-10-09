@@ -1,0 +1,429 @@
+package net.onixary.shapeShifterCurseFabric.player_form;
+
+import com.google.gson.JsonArray;
+import com.google.gson.JsonElement;
+import com.google.gson.JsonObject;
+import io.github.apace100.apoli.power.Power;
+import io.github.apace100.apoli.power.PowerType;
+import io.github.apace100.apoli.power.factory.PowerFactory;
+import io.github.apace100.apoli.registry.ApoliRegistries;
+import io.github.apace100.apoli.util.NamespaceAlias;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.util.Tuple;
+import net.minecraft.world.entity.player.Player;
+import net.onixary.shapeShifterCurseFabric.ShapeShifterCurseFabric;
+import net.onixary.shapeShifterCurseFabric.mixin.accessor.PowerTypeRegistryAccessor;
+import net.onixary.shapeShifterCurseFabric.perk.RegPerks;
+import net.onixary.shapeShifterCurseFabric.player_animation.AnimationHolder;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AbstractAnimStateController;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AnimSystem;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AnimUtils;
+import net.onixary.shapeShifterCurseFabric.player_form.utils.FormUtils;
+import net.onixary.shapeShifterCurseFabric.player_form.utils.NeedCheckUsableForm;
+import net.onixary.shapeShifterCurseFabric.player_form.utils.PlayerFormComponent;
+import net.onixary.shapeShifterCurseFabric.render.form_render.FormRenderUtils;
+import net.onixary.shapeShifterCurseFabric.util.PatronUtils;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.*;
+
+public class DynamicForm implements IForm, ISubForm, NeedCheckUsableForm {
+    public static final UUID PublicUUID = UUID.fromString("00000000-0000-0000-0000-000000000000");
+
+    public @NotNull ResourceLocation formID;
+    public Set<String> formFlag;
+
+    private IFormGroup formGroup = null;
+    private int formTier = -2;
+    private PlayerFormBodyType bodyType = PlayerFormBodyType.NORMAL;
+
+    private @Nullable Tuple<ResourceLocation, ResourceLocation> layerOverwrite = null;
+    public @Nullable Tuple<ResourceLocation, ResourceLocation> layerRenderOverwrite = null;
+    private boolean powerAnimRegistered = false;
+
+    private JsonObject formData;
+
+    private Map<ResourceLocation, AbstractAnimStateController> animStateControllerMap = new HashMap<>();
+    private AbstractAnimStateController defaultAnimStateController = AnimUtils.EMPTY_CONTROLLER;
+    private Map<ResourceLocation, AnimUtils.AnimationHolderData> powerAnimBuilderMap = new HashMap<>();
+    private Map<ResourceLocation, AnimationHolder> powerAnimMap = new HashMap<>();
+
+    public boolean IsPatronForm = false;  // 可以使用特殊物品直接变形
+    public int RequirePatronLevel = 0;  // 需要的赞助等级
+    public List<UUID> PlayerUUIDs = new ArrayList<>();
+
+    public List<ResourceLocation> ExtraPower = new LinkedList<>();
+    public HashMap<ResourceLocation, JsonObject> ExtraPowerData = new LinkedHashMap<>();
+    public List<ResourceLocation> RemovedPower = new LinkedList<>();
+    private int TempPowerIndex = 0;
+
+    public ResourceLocation fallbackFormID = null;
+    public IForm masterForm = null;
+
+    public ResourceLocation perkTreeID = RegPerks.EMPTY_PERK_TREE;
+
+    public DynamicForm(@Nullable ResourceLocation formID, JsonObject formData) {
+        this.formID = formID;
+        this.formData = formData;
+        this.loadFromJson();
+    }
+
+    @Override
+    public @NotNull ResourceLocation getFormID() {
+        return formID;
+    }
+
+    @Override
+    public @NotNull Set<String> getFormFlag() {
+        return this.formFlag;
+    }
+
+    @Override
+    public int getFormTier() {
+        return this.formTier;
+    }
+
+    @Override
+    public @Nullable IFormGroup getFormGroup() {
+        return this.formGroup;
+    }
+
+    @Override
+    public void setFormGroup(IFormGroup group, int formTier) {
+        this.formGroup = group;
+        this.formTier = formTier;
+    }
+
+
+    @Override
+    public @NotNull Tuple<ResourceLocation, ResourceLocation> getFormLayer() {
+        return Objects.requireNonNullElseGet(this.layerOverwrite, () -> new Tuple<>(ResourceLocation.fromNamespaceAndPath("origins", "origin"), ResourceLocation.fromNamespaceAndPath(this.formID.getNamespace(), "form_" + this.formID.getPath())));
+    }
+
+    @Override
+    public @NotNull PlayerFormBodyType getBodyType() {
+        return this.bodyType;
+    }
+
+    @Override
+    public @Nullable IForm getNextForm(Player player, ITransformReason reason) {
+        return ISubForm.super.getNextForm(player, reason);
+    }
+
+    @Override
+    public @Nullable IForm getPrevForm(Player player, ITransformReason reason) {
+        return ISubForm.super.getPrevForm(player, reason);
+    }
+
+    @Override
+    public @NotNull IForm getDefaultNextForm(Player player, ITransformReason reason) {
+        return ISubForm.super.getDefaultNextForm(player, reason);
+    }
+
+    @Override
+    public @NotNull IForm getDefaultPrevForm(Player player, ITransformReason reason) {
+        return ISubForm.super.getDefaultPrevForm(player, reason);
+    }
+
+    @Override
+    public @Nullable Tuple<ResourceLocation, ResourceLocation> getRenderLayerOverride() {
+        return this.layerRenderOverwrite;
+    }
+
+    public Tuple<ResourceLocation, ResourceLocation> getCurrentRenderLayer() {
+        return Objects.requireNonNullElseGet(this.getRenderLayerOverride(), this::getFormLayer);
+    }
+
+    public boolean isModelExist() {
+        Tuple<ResourceLocation, ResourceLocation> currentLayer = this.getCurrentRenderLayer();
+        return FormRenderUtils.formRendererRegistry.getOrDefault(currentLayer.getA(), new HashMap<>()).containsKey(currentLayer.getB());
+    }
+
+    @Override
+    public @Nullable AbstractAnimStateController getAnimStateController(Player player, AnimSystem.AnimSystemData animSystemData, @NotNull ResourceLocation animStateID) {
+        if (!this.isModelExist()) {
+            return AnimUtils.EMPTY_CONTROLLER; // 如果未加载模型则不修改动画
+        }
+        return animStateControllerMap.getOrDefault(animStateID, defaultAnimStateController);
+    }
+
+    @Override
+    public void registerPowerAnim(Player player, AnimSystem.AnimSystemData animSystemData) {
+        for (ResourceLocation powerAnimID : powerAnimBuilderMap.keySet()) {
+            AnimUtils.AnimationHolderData powerAnimData = powerAnimBuilderMap.get(powerAnimID);
+            powerAnimMap.put(powerAnimID, powerAnimData.build());
+        }
+        this.powerAnimRegistered = true;
+    }
+
+    @Override
+    public @NotNull Tuple<Boolean, @Nullable AnimationHolder> getPowerAnim(Player player, AnimSystem.AnimSystemData animSystemData, @NotNull ResourceLocation powerAnimID) {
+        if (!this.isModelExist()) {
+            return new Tuple<>(false, null); // 如果未加载模型则不修改动画
+        }
+        boolean isAnimRegistered = powerAnimMap.containsKey(powerAnimID);
+        AnimationHolder powerAnimData = powerAnimMap.get(powerAnimID);
+        if (isAnimRegistered) {
+            return new Tuple<>(true, powerAnimData);
+        }
+        return new Tuple<>(false, null);
+    }
+
+    @Override
+    public boolean isPowerAnimRegistered(Player player, AnimSystem.AnimSystemData animSystemData) {
+        return powerAnimRegistered;
+    }
+
+    @Override
+    public void applyScale(Player player) {
+        // NormalForm.RESET_SCALE_FUNC.accept(player);
+    }
+
+    public void loadFromJson() {
+        if (this.formData.has("FormID")) { this.formID = ResourceLocation.tryParse(this.formData.get("FormID").getAsString()); }
+        if (this.formID == null) {
+            throw new RuntimeException("FormID Is Null");
+        }
+        ResourceLocation groupID = ResourceLocation.tryParse(_Gson_GetString(formData, "group", this.formID.toString()));
+        int weight = _Gson_GetInt(formData, "weight", 1);
+        int tier = _Gson_GetInt(formData, "tier", 1);
+        IFormGroup group = RegPlayerForms.getPlayerFormGroup(groupID);
+        if (group != null) {
+            group.registerForm(tier, weight, this);
+        }
+        this.bodyType = PlayerFormBodyType.valueOf(_Gson_GetString(formData, "bodyType", "NORMAL"));
+        ResourceLocation layerID = ResourceLocation.tryParse(_Gson_GetString(formData, "originLayerID", null));
+        ResourceLocation powerFormID = ResourceLocation.tryParse(_Gson_GetString(formData, "originID", null));
+        if (layerID != null && powerFormID != null) {
+            this.layerOverwrite = new Tuple<>(layerID, powerFormID);
+        }
+        HashSet<String> flags = new HashSet<>();
+        if (this.formData.has("flag")) {
+            for (JsonElement flagJson : this.formData.get("flag").getAsJsonArray()) {
+                flags.add(flagJson.getAsString());
+            }
+        }
+        this.formFlag = Set.copyOf(flags);
+        if (formData.has("anim")) {
+            if (formData.get("anim").isJsonObject()) {
+                for (Map.Entry<String, JsonElement> entry : formData.get("anim").getAsJsonObject().entrySet()) {
+                    if (entry.getValue().isJsonObject()) {
+                        ResourceLocation animStateID = ResourceLocation.tryParse(entry.getKey());
+                        if (animStateID != null) {
+                            this.RegisterAnim(animStateID, entry.getValue().getAsJsonObject());
+                        } else {
+                            ShapeShifterCurseFabric.LOGGER.error("Error while loading player form {}: Invalid animStateID: {}", this.formID.toString(), entry.getKey());
+                        }
+                    } else {
+                        ShapeShifterCurseFabric.LOGGER.error("Error while loading player form {}: Invalid animState data: {}", this.formID.toString(), entry.getValue().toString());
+                    }
+                }
+            } else {
+                ShapeShifterCurseFabric.LOGGER.error("Error while loading player form {}: Need Update DataPack", this.formID.toString());
+            }
+        }
+        if (formData.has("powerAnim") && formData.get("powerAnim").isJsonObject())  {
+            for (Map.Entry<String, JsonElement> entry : formData.get("powerAnim").getAsJsonObject().entrySet()) {
+                if (entry.getValue().isJsonObject()) {
+                    ResourceLocation powerAnimID = ResourceLocation.tryParse(entry.getKey());
+                    if (powerAnimID != null) {
+                        this.RegisterPowerAnim(powerAnimID, entry.getValue().getAsJsonObject());
+                    } else {
+                        ShapeShifterCurseFabric.LOGGER.error("Error while loading player form {}: Invalid powerAnimID: {}", this.formID.toString(), entry.getKey());
+                    }
+                } else {
+                    ShapeShifterCurseFabric.LOGGER.error("Error while loading player form {}: Invalid powerAnim data: {}", this.formID.toString(), entry.getValue().toString());
+                }
+            }
+        }
+        if (formData.has("animDefault") && formData.get("animDefault").isJsonObject()) {
+            this.defaultAnimStateController = AnimUtils.readController(formData.get("animDefault").getAsJsonObject());
+        }
+        String IDStr = _Gson_GetString(formData, "render_layer", null);
+        this.layerRenderOverwrite = IDStr == null ? null : new Tuple<>(ResourceLocation.fromNamespaceAndPath("origins", "origin"), ResourceLocation.tryParse(IDStr));
+        this.loadExtraPower(formData);
+        this.IsPatronForm = _Gson_GetBoolean(formData, "IsPatronForm", false);
+        this.PlayerUUIDs.clear();
+        if (formData.has("PlayerUUID")) {
+            for (JsonElement uuidJson : formData.get("PlayerUUID").getAsJsonArray()) {
+                UUID uuid = UUID.fromString(uuidJson.getAsString());
+                if (uuid != null) {
+                    this.PlayerUUIDs.add(uuid);
+                }
+            }
+        }
+        this.RequirePatronLevel = _Gson_GetInt(formData, "RequirePatronLevel", 0);
+        if (formData.has("fallback")) {
+            this.fallbackFormID = ResourceLocation.tryParse(formData.get("fallback").getAsString());
+        }
+        if (formData.has("MasterForm")) {
+            ResourceLocation masterFormID = ResourceLocation.tryParse(formData.get("MasterForm").getAsString());
+            this.masterForm = RegPlayerForms.getPlayerForm(masterFormID);
+        }
+        if (formData.has("PerkTree")) {
+            ResourceLocation perkTreeID = ResourceLocation.tryParse(formData.get("PerkTree").getAsString());
+            if (RegPerks.PerkTreeRegistry.containsKey(perkTreeID)) {
+                this.perkTreeID = perkTreeID;
+            } else {
+                this.perkTreeID = RegPerks.EMPTY_PERK_TREE;
+            }
+        }
+    }
+
+    public static DynamicForm fromJson(@Nullable ResourceLocation identifier, JsonObject data) {
+        return new DynamicForm(identifier, data);
+    }
+
+    public JsonObject toJson() {
+        return formData;
+    }
+
+    private static String _Gson_GetString(JsonObject data, String key, String defaultValue) {
+        if (data.has(key)) {
+            return data.get(key).getAsString();
+        }
+        return defaultValue;
+    }
+
+    private static int _Gson_GetInt(JsonObject data, String key, int defaultValue) {
+        if (data.has(key)) {
+            return data.get(key).getAsInt();
+        }
+        return defaultValue;
+    }
+
+    private static boolean _Gson_GetBoolean(JsonObject data, String key, boolean defaultValue) {
+        if (data.has(key)) {
+            return data.get(key).getAsBoolean();
+        }
+        return defaultValue;
+    }
+
+    private void RegisterAnim(@NotNull ResourceLocation animStateID, @NotNull JsonObject controllerJsonData) {
+        AbstractAnimStateController controller = AnimUtils.readController(controllerJsonData);
+        animStateControllerMap.put(animStateID, controller);
+    }
+
+    private void RegisterPowerAnim(@NotNull ResourceLocation powerAnimID, @NotNull JsonObject powerAnimJsonData) {
+        AnimUtils.AnimationHolderData powerAnimData = AnimUtils.readAnim(powerAnimJsonData);
+        powerAnimBuilderMap.put(powerAnimID, powerAnimData);
+    }
+
+    public List<ResourceLocation> getExtraPower() {
+        List<ResourceLocation> powerList = new LinkedList<>(this.ExtraPower);
+        // this.ExtraPowerData
+        for (Map.Entry<ResourceLocation, JsonObject> powerData : this.ExtraPowerData.entrySet()) {
+            powerList.add(powerData.getKey());
+        }
+        return powerList;
+    }
+
+    public List<ResourceLocation> getRemovedPower() {
+        return this.RemovedPower;
+    }
+
+    private ResourceLocation registerPower(JsonObject powerData) {
+        ResourceLocation powerID = ResourceLocation.fromNamespaceAndPath(this.formID.getNamespace(), this.formID.getPath() + "_tpower_" + this.TempPowerIndex);
+        if (powerData == null) {
+            return null;
+        }
+        try {
+            ResourceLocation PowerID = ResourceLocation.tryParse(powerData.get("type").getAsString());
+            PowerFactory<Power> pf = null;
+            // Apoli-Legacy: 用全局 NamespaceAlias（resolveAlias 无 predicate 重载，未 alias 命名空间抛异常，先 hasAlias 判断）
+            ResourceLocation resolvedID = NamespaceAlias.hasAlias(PowerID) ? NamespaceAlias.resolveAlias(PowerID) : PowerID;
+            pf = ApoliRegistries.POWER_FACTORY.get(resolvedID);
+            if (pf == null) {
+                ShapeShifterCurseFabric.LOGGER.warn("Power Factory is null! From {}", this.formID.toString());
+                return null;
+            }
+            // Apoli-Legacy 的 read 需 HolderLookup.Provider；与 1.21.11 分支一致传 null（form power 数据不含需 provider 的注册表引用）
+            PowerFactory<Power>.Instance pi = pf.read(powerData, null);
+            PowerType<?> powerType = new PowerType<>(powerID, pi);
+            PowerTypeRegistryAccessor.Invoke_Update(powerID, powerType);
+        } catch (Exception e) {
+            ShapeShifterCurseFabric.LOGGER.warn("Failed to register power: {}", powerData.toString());
+            return null;
+        }
+        this.TempPowerIndex++;
+        return powerID;
+    }
+
+    private void loadExtraPower(JsonObject formData) {
+        this.ExtraPower.clear();
+        this.ExtraPowerData.clear();
+        this.RemovedPower.clear();
+        if (formData.has("ExtraPower")) {
+            JsonArray powerArray = formData.getAsJsonArray("ExtraPower");
+            for (JsonElement powerElement : powerArray) {
+                if (powerElement.isJsonPrimitive()) {
+                    this.ExtraPower.add(ResourceLocation.tryParse(powerElement.getAsString()));
+                } else if (powerElement.isJsonObject()) {
+                    this.ExtraPowerData.put(registerPower(powerElement.getAsJsonObject()), powerElement.getAsJsonObject());
+                } else {
+                    ShapeShifterCurseFabric.LOGGER.warn("Invalid ExtraPower data: {}", powerElement.toString());
+                }
+            }
+        }
+        if (formData.has("RemovedPower")) {
+            JsonArray powerArray = formData.getAsJsonArray("RemovedPower");
+            for (JsonElement powerElement : powerArray) {
+                this.RemovedPower.add(ResourceLocation.tryParse(powerElement.getAsString()));
+            }
+        }
+    }
+
+    @Override
+    public boolean IsPlayerCanUse(Player player) {
+        if (this.PlayerUUIDs.contains(player.getUUID())) {
+            return true;
+        }
+        return (this.PlayerUUIDs.isEmpty() || this.PlayerUUIDs.contains(PublicUUID)) && (PatronUtils.PatronLevels.getOrDefault(player.getUUID(), 0) >= this.RequirePatronLevel);
+    }
+
+    @Override
+    public boolean isDynamicForm() {
+        return true;
+    }
+
+    @Override
+    public @Nullable Tuple<List<ResourceLocation>, List<ResourceLocation>> getLayerModifier() {
+        return null;
+    }
+
+
+    @Override
+    public Boolean isSubForm() {
+        return masterForm != null;
+    }
+
+    @Override
+    public IForm getMasterForm() {
+        return masterForm;
+    }
+
+    @Override
+    public void afterApplyLayer(Player player) {
+        ResourceLocation layer = this.getFormLayer().getB();
+        for (ResourceLocation powerID: this.getExtraPower()) {
+            FormUtils.applyPower(player, powerID, layer);
+        }
+        for (ResourceLocation powerID: this.getRemovedPower()) {
+            FormUtils.removePower(player, powerID, layer);
+        }
+    }
+
+    @Override
+    public void onTransform_Finish(Player player) {
+        if (this.fallbackFormID != null) {
+            PlayerFormComponent pfc = PlayerFormComponent.COMPONENT.get(player);
+            pfc.setFallbackForm(this.fallbackFormID);
+        }
+    }
+
+    @Override
+    public ResourceLocation getPerkTreeID() {
+        return perkTreeID;
+    }
+}

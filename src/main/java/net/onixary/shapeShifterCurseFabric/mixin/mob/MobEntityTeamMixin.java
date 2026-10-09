@@ -1,0 +1,43 @@
+package net.onixary.shapeShifterCurseFabric.mixin.mob;
+
+import io.github.apace100.apoli.component.PowerHolderComponent;
+import net.minecraft.world.entity.Entity;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.monster.Witch;
+import net.minecraft.world.entity.player.Player;
+import net.onixary.shapeShifterCurseFabric.additional_power.PillagerFriendlyPower;
+import net.onixary.shapeShifterCurseFabric.additional_power.WitchFriendlyPower;
+import net.onixary.shapeShifterCurseFabric.util.ModTags;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfoReturnable;
+
+@Mixin(Entity.class)
+public abstract class MobEntityTeamMixin {
+    @Inject(method = "isAlliedTo(Lnet/minecraft/world/entity/Entity;)Z", at = @At("HEAD"), cancellable = true)
+    private void onIsTeammateCheck(Entity other, CallbackInfoReturnable<Boolean> cir) {
+        // `this` 在 Mixin 中指向 Mixin 类的实例，需要强制转换为 Entity
+        Entity self = (Entity) (Object) this;
+
+        // 检查目标实体是否为玩家
+        if (other instanceof Player player) {
+            if(self instanceof LivingEntity livingEntity) {
+                // 双重判断 提升其他Mod的兼容性 (没有就加Illager_Tag)
+                if ((livingEntity.getType().is(ModTags.Illager_Tag)) && PowerHolderComponent.hasPower(player, PillagerFriendlyPower.class)) {
+                    cir.setReturnValue(true);
+                }
+                if ((livingEntity instanceof Witch || livingEntity.getType().is(ModTags.Witch_Tag)) && PowerHolderComponent.hasPower(player, WitchFriendlyPower.class)) {
+                    cir.setReturnValue(true);
+                }
+
+                // spider_form 蜘蛛友好判定
+                // 先弃用
+//                if (livingEntity instanceof SpiderEntity || livingEntity instanceof CaveSpiderEntity ||livingEntity.getType().isIn(ModTags.Spider_Tag) && PowerHolderComponent.hasPower(player, SpiderFriendlyPower.class)) {
+//                    cir.setReturnValue(true);
+//                }
+            }
+        }
+    }
+
+}

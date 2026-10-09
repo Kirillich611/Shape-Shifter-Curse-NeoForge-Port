@@ -1,0 +1,164 @@
+package net.onixary.shapeShifterCurseFabric.mixin;
+
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.util.Tuple;
+import net.minecraft.world.entity.LivingEntity;
+import net.minecraft.world.entity.player.Player;
+import net.minecraft.world.level.Level;
+import net.onixary.shapeShifterCurseFabric.ShapeShifterCurseFabric;
+import net.onixary.shapeShifterCurseFabric.minion.IMinion;
+import net.onixary.shapeShifterCurseFabric.minion.IPlayerEntityMinion;
+import net.onixary.shapeShifterCurseFabric.minion.PlayerMinionComponent;
+import net.onixary.shapeShifterCurseFabric.minion.RegPlayerMinionComponent;
+import org.jetbrains.annotations.Nullable;
+import org.spongepowered.asm.mixin.Mixin;
+import org.spongepowered.asm.mixin.Unique;
+import org.spongepowered.asm.mixin.injection.At;
+import org.spongepowered.asm.mixin.injection.Inject;
+import org.spongepowered.asm.mixin.injection.callback.CallbackInfo;
+
+import java.util.ArrayList;
+import java.util.LinkedList;
+import java.util.UUID;
+import java.util.concurrent.ConcurrentHashMap;
+
+@Mixin(Player.class)
+public abstract class MinionPlayerEntityMixin implements IPlayerEntityMinion {
+    @Unique
+    private @Nullable PlayerMinionComponent getPlayerMinionComponent() {
+        try {
+            return RegPlayerMinionComponent.PLAYER_MINION_DATA.get((Player)(Object)this);
+        } catch (Exception e) {
+            ShapeShifterCurseFabric.LOGGER.error("Failed to get PlayerMinionComponent", e);
+            return null;
+        }
+    }
+
+    @Unique
+    private boolean syncPlayerMinionComponent() {
+        try {
+            RegPlayerMinionComponent.PLAYER_MINION_DATA.sync((Player)(Object)this);
+            return true;
+        } catch (Exception e) {
+            ShapeShifterCurseFabric.LOGGER.error("Failed to sync PlayerMinionComponent", e);
+            return false;
+        }
+    }
+
+    @Override
+    public ConcurrentHashMap<ResourceLocation, ArrayList<UUID>> shape_shifter_curse$getAllMinions() {
+        PlayerMinionComponent playerMinionComponent = this.getPlayerMinionComponent();
+        if (playerMinionComponent != null) {
+            return playerMinionComponent.minions;
+        } else {
+            return new ConcurrentHashMap<>();
+        }
+    }
+
+    @Override
+    public ArrayList<UUID> shape_shifter_curse$getMinionsByMinionID(ResourceLocation MinionID) {
+        return this.shape_shifter_curse$getAllMinions().computeIfAbsent(MinionID, k -> new ArrayList<>());
+    }
+
+    @Override
+    public int shape_shifter_curse$getMinionsCount() {
+        int total = 0;
+        for (ResourceLocation minionID : shape_shifter_curse$getAllMinions().keySet()) {
+            total += this.shape_shifter_curse$getMinionsCount(minionID);
+        }
+        return total;
+    }
+
+    @Override
+    public int shape_shifter_curse$getMinionsCount(ResourceLocation MinionID) {
+        return this.shape_shifter_curse$getMinionsByMinionID(MinionID).size();
+    }
+
+    @Override
+    public boolean shape_shifter_curse$minionExist(ResourceLocation MinionID, UUID minionUUID) {
+        return this.shape_shifter_curse$getMinionsByMinionID(MinionID).contains(minionUUID);
+    }
+
+    @Override
+    public boolean shape_shifter_curse$removeMinion(ResourceLocation MinionID, UUID minionUUID) {
+        boolean result = this.shape_shifter_curse$getMinionsByMinionID(MinionID).remove(minionUUID);
+        this.syncPlayerMinionComponent();
+        return result;
+    }
+
+    @Override
+    public <T extends IMinion<? extends LivingEntity>> boolean shape_shifter_curse$addMinion(T minion) {
+        this.shape_shifter_curse$getMinionsByMinionID(minion.getMinionTypeID()).add(minion.getSelf().getUUID());
+        minion.setOwner((Player)(Object)this);
+        this.syncPlayerMinionComponent();
+        return true;
+    }
+
+    @Override
+    public void shape_shifter_curse$applyCooldown(ResourceLocation MinionID, long time) {
+        PlayerMinionComponent playerMinionComponent = this.getPlayerMinionComponent();
+        if (playerMinionComponent == null) {
+            return;
+        }
+        playerMinionComponent.minionsCooldown.put(MinionID, time);
+        this.syncPlayerMinionComponent();
+        return;
+    }
+
+    @Override
+    public long shape_shifter_curse$getCooldownTime(ResourceLocation MinionID) {
+        PlayerMinionComponent playerMinionComponent = this.getPlayerMinionComponent();
+        if (playerMinionComponent == null) {
+            return Long.MAX_VALUE;  // 拿不到组件就返回最大值 表示没有完成冷却
+        }
+        return playerMinionComponent.minionsCooldown.getOrDefault(MinionID, 0L);  // 拿不到就返回0 表示没有冷却
+    }
+
+    @Override
+    public void shape_shifter_curse$resetAllCooldown() {
+        PlayerMinionComponent playerMinionComponent = this.getPlayerMinionComponent();
+        if (playerMinionComponent == null) {
+            return;
+        }
+        playerMinionComponent.minionsCooldown.clear();
+        this.syncPlayerMinionComponent();
+        return;
+    }
+
+    public void shape_shifter_curse$clearAllMinions() {
+        this.shape_shifter_curse$getAllMinions().clear();
+        this.syncPlayerMinionComponent();
+    }
+
+    public void shape_shifter_curse$clearMinions(ResourceLocation MinionID) {
+        this.shape_shifter_curse$getMinionsByMinionID(MinionID).clear();
+        this.syncPlayerMinionComponent();
+    }
+
+    // 检查召唤物是否存在
+    @Unique
+    private void checkMinion(Player realThis, ServerLevel world) {
+        ConcurrentHashMap<ResourceLocation, ArrayList<UUID>> minions = this.shape_shifter_curse$getAllMinions();
+        LinkedList<Tuple<ResourceLocation, UUID>> minionsToRemove = new LinkedList<>();
+        for (ResourceLocation minionID : minions.keySet()) {
+            for (UUID minionUUID : minions.get(minionID)) {
+                if (world.getEntity(minionUUID) == null) {
+                    minionsToRemove.add(new Tuple<>(minionID, minionUUID));
+                }
+            }
+        }
+        for (Tuple<ResourceLocation, UUID> minionToRemove : minionsToRemove) {
+            this.shape_shifter_curse$removeMinion(minionToRemove.getA(), minionToRemove.getB());
+        }
+    }
+
+    @Inject(method = "tick", at = @At("HEAD"))
+    public void shape_shifter_curse$onTick(CallbackInfo ci) {
+        Player realThis = (Player)(Object)this;
+        Level world = realThis.level();
+        if (world instanceof ServerLevel serverWorld && realThis.tickCount % 20 == 0) {
+            this.checkMinion(realThis, serverWorld);
+        }
+    }
+}

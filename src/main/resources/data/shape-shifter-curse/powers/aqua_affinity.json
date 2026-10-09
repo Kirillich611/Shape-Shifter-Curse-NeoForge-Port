@@ -1,0 +1,32 @@
+{
+  "type": "apoli:multiple",
+  "underwater": {
+    "type": "apoli:attribute",
+    "modifier": {
+      "attribute": "minecraft:player.submerged_mining_speed",
+      "operation": "addition",
+      "value": 0.8
+    }
+  },
+  "ungrounded": {
+    "type": "apoli:conditioned_attribute",
+    "modifier": {
+      "attribute": "minecraft:player.block_break_speed",
+      "operation": "multiply_total",
+      "value": 4.0
+    },
+    "tick_rate": 5,
+    "condition": {
+      "type": "apoli:and",
+      "conditions": [
+        {
+          "type": "shape-shifter-curse:is_in_water_fix"
+        },
+        {
+          "type": "apoli:on_block",
+          "inverted": true
+        }
+      ]
+    }
+  }
+}

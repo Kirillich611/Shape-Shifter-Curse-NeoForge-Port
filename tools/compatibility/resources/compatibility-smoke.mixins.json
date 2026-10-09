@@ -1,0 +1,7 @@
+{
+    "required": true,
+    "package": "compatibility.mixin",
+    "compatibilityLevel": "JAVA_21",
+    "mixins": ["SableOrientationMixin"],
+    "injectors": {"defaultRequire": 1}
+}

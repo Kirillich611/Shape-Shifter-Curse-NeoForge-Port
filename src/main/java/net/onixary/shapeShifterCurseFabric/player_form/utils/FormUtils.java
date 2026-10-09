@@ -1,0 +1,341 @@
+package net.onixary.shapeShifterCurseFabric.player_form.utils;
+
+import io.github.apace100.apoli.component.PowerHolderComponent;
+import io.github.apace100.apoli.power.PowerType;
+import io.github.apace100.apoli.power.PowerTypeRegistry;
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.util.Tuple;
+import net.minecraft.world.entity.player.Player;
+import net.onixary.shapeShifterCurseFabric.ShapeShifterCurseFabric;
+import net.onixary.shapeShifterCurseFabric.event.SSCEvent;
+import net.onixary.shapeShifterCurseFabric.integration.origins.component.OriginComponent;
+import net.onixary.shapeShifterCurseFabric.integration.origins.origin.Origin;
+import net.onixary.shapeShifterCurseFabric.integration.origins.origin.OriginLayer;
+import net.onixary.shapeShifterCurseFabric.integration.origins.origin.OriginLayers;
+import net.onixary.shapeShifterCurseFabric.integration.origins.origin.OriginRegistry;
+import net.onixary.shapeShifterCurseFabric.integration.origins.registry.ModComponents;
+import net.onixary.shapeShifterCurseFabric.networking.ModPacketsS2CServer;
+import net.onixary.shapeShifterCurseFabric.perk.PerkUtils;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AnimUtils;
+import net.onixary.shapeShifterCurseFabric.player_form.IForm;
+import net.onixary.shapeShifterCurseFabric.player_form.ITransformReason;
+import net.onixary.shapeShifterCurseFabric.player_form.RegPlayerForms;
+import net.onixary.shapeShifterCurseFabric.status_effects.attachment.EffectManager;
+import net.onixary.shapeShifterCurseFabric.util.TrinketUtils;
+import net.onixary.shapeShifterCurseFabric.util.Verify.PatronDataSegment;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+import java.util.*;
+import java.util.function.Predicate;
+
+public class FormUtils {
+    public record FlagData(String flag) {
+        public boolean hasFlag(IForm form) {
+            return form.getFormFlag().contains(flag);
+        }
+
+        public Set<String> appendFlag(Set<String> oldFlag) {
+                Set<String> newSet = new HashSet<>(oldFlag);
+                newSet.add(flag);
+                return Set.copyOf(newSet);
+            }
+
+        public Predicate<IForm> hasFlag() {
+            return form -> form.getFormFlag().contains(flag);
+        }
+        }
+
+    public static final FlagData HasSlowFall = new FlagData("slow_fall"); // 给动画系统用的 替代hasSlowFall函数
+    public static final FlagData NoInstinct = new FlagData("no_instinct"); // 禁用本能系统(条消失) 给sp 开书前后 最终形态用
+    public static final FlagData LockInstinct = new FlagData("lock_instinct"); // 锁定本能系统(条不消失) 给最后一个可退回形态用
+    public static final FlagData CursedMoonFinalForm = new FlagData("cursed_moon_final_form"); // 当诅咒之月进化此形态时 会自动回退到Tier1
+    public static final FlagData NoCursedMoonTFTarget = new FlagData("no_cursed_moon_target"); // 禁止诅咒之月变形至目标形态 给蜘蛛茧用
+    public static final FlagData NoCursedMoonEffect = new FlagData("no_cursed_moon_effect"); // 免疫诅咒之月效果 给开书前 SP 最终形态用
+    public static final FlagData NoInstinctTFTarget = new FlagData("no_instinct_target"); // 禁止本能系统变形至目标形态
+    public static final FlagData InhibitorResist = new FlagData("inhibitor_resist");  // 禁止普通抑制剂 给最后一个可退回形态用
+    public static final FlagData InhibitorImmune = new FlagData("inhibitor_immune"); // 禁止常规抑制剂(除了创造版本) 给最终形态用
+    public static final FlagData CatalystResist = new FlagData("catalyst_resist"); // 禁止普通催化剂
+    public static final FlagData CatalystImmune = new FlagData("catalyst_immune"); // 禁止催化剂
+    public static final FlagData StarterForm = new FlagData("starter_form"); // 诅咒之月给开书后形态随机挑的形态
+    public static final FlagData SpecialForm = new FlagData("special_form"); // SP形态
+    public static final FlagData CanTFToFinalForm = new FlagData("can_tf_to_final_form"); // 可以通过高级催化剂变形到最终形态
+    public static final FlagData FinalForm = new FlagData("final_form"); // 最终形态 PowerfulCatalyst仅能变形到此形态
+    public static final FlagData CanHaveTransformEffect = new FlagData("can_have_transform_effect"); // 可以拥有变形效果
+    public static final FlagData TransformEffectCanApply = new FlagData("transform_effect_can_apply"); // 可以被变形效果修改形态
+    public static final FlagData LockPoseToStand = new FlagData("lock_pose_to_stand"); // 锁定姿态为站立
+    public static final FlagData InitialForm = new FlagData("initial_form"); // 初始阶段Flag
+
+    // 在此解释一下为什么要先变TechnicalFormOrigin后变目标Origin 因为形态能力还原依赖于不同Origin切换时的清除旧Power+添加新Power 如果Origin一样 就会导致饰品/子形态/额外能力挂载系统添加/删除的能力无法还原
+    public static Origin TechnicalFormOrigin = null;
+
+    public static record ExtraPower(@NotNull ResourceLocation LayerID, @NotNull ResourceLocation FormID, @NotNull List<ResourceLocation> PowerIDs) {
+        public @NotNull ResourceLocation getLayerID() { return LayerID; }
+        public @NotNull ResourceLocation getFormID() { return FormID; }
+        public @NotNull List<ResourceLocation> getPowerIDs() { return PowerIDs; }
+
+        public boolean canApply(ResourceLocation layerID, ResourceLocation formID) {
+            return getLayerID().equals(layerID) && getFormID().equals(formID);
+        }
+    }
+
+    public static void applyPower(Player player, ResourceLocation powerId, ResourceLocation powerSource) {
+        if (PowerTypeRegistry.contains(powerId)) {
+            PowerType<?> powerType = PowerTypeRegistry.get(powerId);
+            if (powerType != null) {
+                PowerHolderComponent powerHolder = PowerHolderComponent.KEY.get(player);
+                powerHolder.addPower(powerType, powerSource);
+            }
+        }
+        else {
+            new Thread(() -> {
+                try {
+                    boolean FoundPower = false;
+                    for (int i = 0; i < 20; i++) {
+                        Thread.sleep(100);
+                        if (PowerTypeRegistry.contains(powerId)) {
+                            FoundPower = true;
+                            break;
+                        }
+                    }
+                    if (FoundPower) {
+                        PowerType<?> powerType = PowerTypeRegistry.get(powerId);
+                        if (powerType != null) {
+                            PowerHolderComponent powerHolder = PowerHolderComponent.KEY.get(player);
+                            powerHolder.addPower(powerType, powerSource);
+                        }
+                    }
+                    else {
+                        ShapeShifterCurseFabric.LOGGER.warn("Failed to apply power " + powerId.toString() + " for player " + player.getName() + " after 2 seconds");
+                    }
+                } catch (InterruptedException e) {
+                    e.printStackTrace();
+                }
+            }).start();
+        }
+    }
+
+    public static void removePower(Player player, ResourceLocation powerId, ResourceLocation powerSource) {
+        PowerType<?> powerType = PowerTypeRegistry.get(powerId);
+        if (powerType != null) {
+            PowerHolderComponent powerHolder = PowerHolderComponent.KEY.get(player);
+            powerHolder.removePower(powerType, powerSource);
+        }
+    }
+
+    public static final HashMap<ResourceLocation, ExtraPower> extraPowerRegistry = new HashMap<>();
+    public static void registerExtraPower(ResourceLocation identifier, ExtraPower extraPower) {
+        extraPowerRegistry.put(identifier, extraPower);
+    }
+
+    public static void applyExtraPower(Player player, Tuple<ResourceLocation, ResourceLocation> layerData) {
+        extraPowerRegistry.forEach((id, extraPower) -> {
+            if (extraPower.canApply(layerData.getA(), layerData.getB())) {
+                extraPower.getPowerIDs().forEach(powerId -> applyPower(player, powerId, layerData.getB()));
+            }
+        });
+    }
+
+    public static void applyLayer(Player player, Tuple<ResourceLocation, ResourceLocation> layerData) {
+        // 临时 等移除Origins后再重新这部分
+        OriginComponent component = ModComponents.ORIGIN.get(player);
+        OriginLayer layer = OriginLayers.getLayer(layerData.getA());
+        if (layer != null && layerData.getB() != null) {
+            Origin origin = OriginRegistry.get(layerData.getB());
+            if(layer.contains(origin, player)){
+                if (TechnicalFormOrigin == null) {
+                    TechnicalFormOrigin = OriginRegistry.get(ShapeShifterCurseFabric.identifier("technical_form"));
+                }
+                component.setOrigin(layer, TechnicalFormOrigin);
+                component.setOrigin(layer, origin);
+                component.sync();
+            }
+        }
+        applyExtraPower(player, layerData);
+    }
+
+    public static Set<String> buildFormFlag(FlagData... flags) {
+        Set<String> flagSet = new HashSet<>();
+        for (FlagData flag : flags) {
+            flagSet.add(flag.flag());
+        }
+        return Set.copyOf(flagSet);
+    }
+
+    public static @Nullable IForm getForm(@NotNull ResourceLocation formID) {
+        return RegPlayerForms.getPlayerForm(formID);
+    }
+
+    public static @NotNull IForm parseForm(@Nullable ResourceLocation formID, IForm defaultForm) {
+        if (formID == null) return defaultForm;
+        IForm form = getForm(formID);
+        return form != null ? form : defaultForm;
+    }
+
+    public static @NotNull IForm getPlayerForm(Player player) {
+        return PlayerFormComponent.COMPONENT.get(player).nowForm;
+    }
+
+    public static @NotNull List<IForm> getPlayerFormHistory(Player player) {
+        return PlayerFormComponent.COMPONENT.get(player).formHistory;
+    }
+
+    public static void savePlayerFormHistory(Player player) {
+        PlayerFormComponent.COMPONENT.sync(player);
+    }
+
+    public static void clearPlayerFormHistory(Player player) {
+        PlayerFormComponent component = PlayerFormComponent.COMPONENT.get(player);
+        component.formHistory.clear();
+        component.sync();
+    }
+
+    public static boolean isFormEqual(@Nullable IForm form1, @Nullable IForm form2) {
+        return form1 != null && form2 != null && form1.isEquals(form2);
+    }
+
+    public static @Nullable IForm getPrevForm(Player player) {
+        List<IForm> formHistory = getPlayerFormHistory(player);
+        if (formHistory.size() > 1 && isFormEqual(getPlayerForm(player), formHistory.getLast())) {
+            return formHistory.get(formHistory.size() - 2);
+        }
+        return null;
+    }
+
+    public static void ensureHistoryCurrent(Player player) {
+        List<IForm> formHistory = getPlayerFormHistory(player);
+        if (!formHistory.isEmpty() && !isFormEqual(getPlayerForm(player), formHistory.getLast())) {
+            formHistory.clear();
+            ShapeShifterCurseFabric.LOGGER.warn("Player " + player.getName().getString() + " form history data error. clear form history data.");
+            savePlayerFormHistory(player);
+        }
+    }
+
+    public static void _loadForm(Player player, IForm form) {
+        PlayerFormComponent playerFormComponent = PlayerFormComponent.COMPONENT.get(player);
+        IForm oldForm = playerFormComponent.nowForm;
+        playerFormComponent.setForm(form);
+        playerFormComponent.sync();
+        SSCEvent.FORM_CHANGE_START.invoker().onFormChange(player, oldForm, form);
+        if (!EffectManager.playerCanHaveTransformativeEffect(player)) {
+            EffectManager.clearTransformativeEffect(player);
+        }
+        // 应用Scale
+        form.applyScale(player);
+        // 应用Power Origin -> OriginExtraPower -> AccessoryPower
+        Tuple<ResourceLocation, ResourceLocation> layerPair = form.getFormLayer();
+        applyLayer(player, layerPair);
+        form.afterApplyLayer(player);
+        playerFormComponent.nowPerkTree = form.getPerkTreeID();
+        PerkUtils.loadAllPerk(player, PerkUtils.getPlayerNowPerkTreeID(player));
+        TrinketUtils.ReApplyAccessoryPowerOnPlayerFormChange(player);
+        form.onApplyPowerEnd(player);
+        // 停止Power动画 目前就蝙蝠用了
+        AnimUtils.stopPowerAnim(player, AnimUtils.AnimationSendSideType.ONLY_SERVER);
+        SSCEvent.FORM_CHANGE_END.invoker().onFormChange(player, oldForm, form);
+
+        if (!player.level().isClientSide() && player instanceof ServerPlayer serverPlayer) {
+            try {
+                ModPacketsS2CServer.sendFormChange(serverPlayer, form.getFormID());
+            } catch (Exception e) {
+                ShapeShifterCurseFabric.LOGGER.error("Failed to send form change notification: ", e);
+            }
+        }
+    }
+
+    public static void _setForm(Player player, IForm form) {
+        IForm prevForm = getPlayerForm(player);
+        prevForm.onTransform_To(player, form);
+        form.onTransform_From(player, prevForm);
+        _loadForm(player, form);
+        form.onTransform_Finish(player);
+    }
+
+    public static void setForm(Player player, IForm form) {
+        _setForm(player, form);
+        List<IForm> formHistory = getPlayerFormHistory(player);
+        formHistory.clear();
+        formHistory.add(form);
+        checkHistorySize(formHistory, 20);
+        savePlayerFormHistory(player);
+    }
+
+    public static void pushFormHistory(Player player, IForm form) {
+        List<IForm> formHistory = getPlayerFormHistory(player);
+        formHistory.add(form);
+        checkHistorySize(formHistory, 20);
+        savePlayerFormHistory(player);
+    }
+
+    public static void checkAndPullFormHistory(Player player, IForm lastForm, IForm prevForm) {
+        List<IForm> formHistory = getPlayerFormHistory(player);
+        if (formHistory.size() > 1 && isFormEqual(formHistory.getLast(), lastForm) && isFormEqual(formHistory.get(formHistory.size() - 2), prevForm)) {
+            formHistory.removeLast();
+        } else {
+            formHistory.clear();
+            ShapeShifterCurseFabric.LOGGER.warn("Player " + player.getName().getString() + " form history data error. clear form history data.");
+        }
+        savePlayerFormHistory(player);
+    }
+
+    public static void checkHistorySize(List<IForm> formHistory, int maxSize) {
+        while (formHistory.size() > maxSize && !formHistory.isEmpty()) {
+            formHistory.removeFirst();
+        }
+    }
+
+    public static void updateFormHistory(Player player, IForm form) {
+        List<IForm> formHistory = getPlayerFormHistory(player);
+        int lastIndex = -1;
+        for (int i = formHistory.size() - 1; i >= 0; i--) {
+            if (isFormEqual(formHistory.get(i), form)) {
+                lastIndex = i;
+                break;
+            }
+        }
+        if (lastIndex != -1) {
+            formHistory.subList(lastIndex + 1, formHistory.size()).clear();
+        } else {
+            formHistory.add(form);
+        }
+        checkHistorySize(formHistory, 20);
+        savePlayerFormHistory(player);
+    }
+
+    public static @NotNull IForm getFormNextLevel(Player player, ITransformReason reason) {
+        IForm form = getPlayerForm(player);
+        return form._getNextForm(player, reason);
+    }
+
+    public static @NotNull IForm getFormPrevLevel(Player player, ITransformReason reason) {
+        IForm form = getPlayerForm(player);
+        return form._getPrevForm(player, reason);
+    }
+
+    public static @NotNull List<IForm> getFormByCondition(@NotNull Predicate<IForm> predicate) {
+        List<IForm> result = new ArrayList<>();
+        for (IForm form : RegPlayerForms.playerForms.values()) {
+            if (predicate.test(form)) {
+                result.add(form);
+            }
+        }
+        return result;
+    }
+
+    public static void applyFallback(Player player) {
+        PlayerFormComponent component = PlayerFormComponent.COMPONENT.get(player);
+        FormUtils._loadForm(player, component.getFallbackForm());
+    }
+
+    public static boolean isFormCanUse(@Nullable Player player, @Nullable IForm form) {
+        boolean canUse = true;
+        if (form instanceof IFormWithCondition iFormWithCondition) {
+            canUse &= iFormWithCondition.checkCanUse(player);
+        }
+        if (form instanceof IPatronForm iPatronForm) {
+            canUse &= PatronDataSegment.isPatronFormCanUse(player, iPatronForm);
+        }
+        return canUse;
+    }
+}

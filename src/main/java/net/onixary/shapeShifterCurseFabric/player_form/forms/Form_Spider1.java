@@ -1,0 +1,50 @@
+package net.onixary.shapeShifterCurseFabric.player_form.forms;
+
+import net.minecraft.resources.ResourceLocation;
+import net.minecraft.world.entity.player.Player;
+import net.onixary.shapeShifterCurseFabric.ShapeShifterCurseFabric;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AbstractAnimStateController;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AnimStateControllerDP.WithSneakAnimController;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AnimStateEnum;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AnimSystem;
+import net.onixary.shapeShifterCurseFabric.player_animation.v3.AnimUtils;
+import net.onixary.shapeShifterCurseFabric.player_form.NormalForm;
+import org.jetbrains.annotations.NotNull;
+import org.jetbrains.annotations.Nullable;
+
+public class Form_Spider1 extends NormalForm {
+    
+    public Form_Spider1(ResourceLocation formID) {
+        super(formID);
+    }
+
+    public static final AnimUtils.AnimationHolderData ANIM_IDLE =
+            new AnimUtils.AnimationHolderData(ShapeShifterCurseFabric.identifier("spider_1_idle"));
+
+    public static final AnimUtils.AnimationHolderData ANIM_MOVE =
+            new AnimUtils.AnimationHolderData(ShapeShifterCurseFabric.identifier("spider_1_move"));
+
+    public static final AbstractAnimStateController IDLE_CONTROLLER =
+            new WithSneakAnimController(ANIM_IDLE, ANIM_IDLE);
+    public static final AbstractAnimStateController MOVE_CONTROLLER =
+            new WithSneakAnimController(ANIM_MOVE, ANIM_IDLE);
+
+
+    @Override
+    public @Nullable AbstractAnimStateController getAnimStateController(
+            Player player, 
+            AnimSystem.AnimSystemData animSystemData, 
+            @NotNull ResourceLocation animStateID) {
+        
+        AnimStateEnum state = AnimStateEnum.getStateEnum(animStateID);
+        if (state != null) {
+            return switch (state) {
+                case ANIM_STATE_IDLE -> IDLE_CONTROLLER;
+                case ANIM_STATE_WALK -> MOVE_CONTROLLER;
+                case ANIM_STATE_SPRINT -> MOVE_CONTROLLER;
+                default -> null;
+            };
+        }
+        return super.getAnimStateController(player, animSystemData, animStateID);
+    }
+}
