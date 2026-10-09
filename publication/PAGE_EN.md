@@ -2,7 +2,18 @@
 
 
 
-An unofficial **Minecraft 1.21.1** compatibility port of **Shape Shifter Curse**, intended for **NeoForge with Sinytra Connector**. This is a Fabric-format mod: Connector is required on NeoForge.
+A reworked version of [wuhenqiubai's unofficial Minecraft 1.21.1 port](https://github.com/wuhenqiubai/Shape-Shifter-Curse_Unofficial-Port) of **Shape Shifter Curse**, focused on compatibility with **NeoForge 1.21.1 through Sinytra Connector**.
+
+The upstream Fabric port can also be launched on NeoForge through Connector, but our testing encountered important mechanics that did not work or behaved incorrectly in that environment. This branch reworks those compatibility paths, including fluids, moisture, swimming, jumping, air movement and critical hits, to bring their behavior closer to the original mod.
+
+Although this mod is built in **Fabric format**, its supported and tested runtime is **NeoForge with Sinytra Connector**. Direct Fabric use is not supported by this branch.
+
+## Which port should I use?
+
+- **NeoForge 1.21.1:** use this port together with Sinytra Connector and the dependencies below.
+- **Fabric 1.21.1:** use [wuhenqiubai's unofficial port](https://www.curseforge.com/minecraft/mc-mods/shape-shifter-curse-unofficial-port).
+
+Choose one SSC port for your installation; do not install both together.
 
 ## What the mod does
 
@@ -25,7 +36,7 @@ Do not install this port alongside the original Shape Shifter Curse or another S
 
 This branch includes fixes for fluid handling, axolotl moisture synchronization and vertical swimming, jump prediction, polar fox air acceleration, chained jump momentum and critical damage under NeoForge. The axolotl water explosion uses Active Skill 1; water exit bursts require an upward-looking, rising exit.
 
-The public branch restores the original axolotl model and textures. Private cosmetic control packets, custom wearable collars, bell physics, outfits and the personal LEA bridge are excluded. Original gameplay accessory items remain available.
+The public branch restores the original axolotl model and textures and keeps the original creature forms and gameplay accessory items.
 
 ## Credits and licensing
 
