@@ -47,6 +47,9 @@ public class CompatibilitySmoke {
             }
 
             ServerLevel level = event.getServer().overworld();
+            // A freshly generated world starts at tick zero; let default cooldowns expire before probing.
+            var levelData = event.getServer().getWorldData().overworldData();
+            levelData.setGameTime(Math.max(1000L, levelData.getGameTime()));
             Class<?> packetClass = Class.forName("io.github.apace100.apoli.networking.PowerListPacket");
             net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Object> codec =
                 (net.minecraft.network.codec.StreamCodec<net.minecraft.network.RegistryFriendlyByteBuf, Object>)packetClass.getField("CODEC").get(null);
