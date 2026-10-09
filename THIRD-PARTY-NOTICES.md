@@ -125,6 +125,3 @@ MixinExtras（MIT）、Gradle wrapper（Apache-2.0）。
 各自遵循其授权（Fabric API 为 Apache-2.0、Satin 为 LGPL-3.0、Pehkui 与
 Cardinal Components API 为 MIT 等）。若改动打包的库，请先核对上游授权。
 
-## ExtraBotany bellflower recording
-
-`assets/shape-shifter-curse/sounds/cosmetic/extrabotany_bellflower.ogg` is the unchanged bellflower recording from the locally provided ExtraBotany mod. ExtraBotany, Copyright (c) 2025 Lounode, MIT license. Full license: `src/main/resources/licenses/ExtraBotany-LICENSE.txt`. No runtime dependency on ExtraBotany.

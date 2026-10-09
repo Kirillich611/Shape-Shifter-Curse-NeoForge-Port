@@ -39,7 +39,7 @@ Code is MIT. Original models, textures, animations, sounds and other media are C
 
 ## Development
 
-Current public version: **1.11.19+1.21.1**. Source branch: `public-connector`.
+Current public version: **1.10.alpha.neoforge.1**. Source branch: `public-connector`.
 
 Build with Java 21: `gradlew.bat build`. On Windows, `Start-Server.cmd` runs the local development server in a console window and `Start-Client.cmd` runs the development client from the current source. These launchers use Fabric Loom; NeoForge/Connector verification uses a separate isolated server.
 

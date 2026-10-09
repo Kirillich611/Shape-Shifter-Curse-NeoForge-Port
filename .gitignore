@@ -194,3 +194,7 @@ build_*.txt
 *.sub_key
 *.auth
 publication/state.local.json
+
+**/logs/
+
+publication/*state.local.json

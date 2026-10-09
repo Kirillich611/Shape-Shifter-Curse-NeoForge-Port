@@ -55,7 +55,7 @@ if ($compileExit -ne 0) { throw "Test harness compilation failed; inspect $compi
 if ($LASTEXITCODE -ne 0) { throw 'Test harness packaging failed.' }
 
 $modVersion = ((Get-Content (Join-Path $portRoot 'gradle.properties') | Select-String '^mod_version=').Line -split '=', 2)[1].Trim()
-$artifact = Join-Path $portRoot "build/libs/shape-shifter-curse-connector-$modVersion+1.21.1.jar"
+$artifact = Join-Path $portRoot "build/libs/shape-shifter-curse-connector-$modVersion.jar"
 if (!(Test-Path -LiteralPath $artifact)) { throw "Build first: $artifact" }
 $existing = @(Get-ChildItem (Join-Path $serverPath 'mods') -Filter 'shape-shifter-curse-connector-*.jar')
 if ($existing.Count -gt 1 -or ($existing.Count -eq 1 -and $existing[0].Name -ne [IO.Path]::GetFileName($artifact))) {

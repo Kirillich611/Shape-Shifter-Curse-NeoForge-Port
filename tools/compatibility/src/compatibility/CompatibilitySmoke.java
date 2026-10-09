@@ -61,6 +61,9 @@ public class CompatibilitySmoke {
             check(wire.readableBytes() == 0, "Power-list decoder consumes the full packet");
             wire.release();
             BlockPos origin = new BlockPos(level.getSharedSpawnPos().getX(), 180, level.getSharedSpawnPos().getZ());
+            // Reset the entire jump corridor: later wall probes persist above the water fixture.
+            for (int x = -3; x <= 3; x++) for (int z = -3; z <= 3; z++)
+                for (int y = 0; y <= 8; y++) level.setBlockAndUpdate(origin.offset(x, y, z), Blocks.AIR.defaultBlockState());
             for (int x = -3; x <= 3; x++) for (int z = -3; z <= 3; z++) {
                 level.setBlockAndUpdate(origin.offset(x, -1, z), Blocks.STONE.defaultBlockState());
                 for (int y = 0; y <= 2; y++) level.setBlockAndUpdate(origin.offset(x, y, z), Blocks.WATER.defaultBlockState());

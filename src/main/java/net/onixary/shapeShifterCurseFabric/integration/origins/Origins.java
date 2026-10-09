@@ -61,7 +61,9 @@ public class Origins implements ModInitializer, OrderedResourceListenerInitializ
 			String[] splitVersion = VERSION.split("\\.");
 			SEMVER = new int[splitVersion.length];
 			for(int i = 0; i < SEMVER.length; i++) {
-				SEMVER[i] = Integer.parseInt(splitVersion[i]);
+				// Public version labels can contain alpha/loader components. Preserve numeric
+				// components, including the final patch, for the existing handshake.
+				SEMVER[i] = splitVersion[i].matches("[0-9]+") ? Integer.parseInt(splitVersion[i]) : 0;
 			}
 		});
 		LOGGER.info("Origins " + VERSION + " is initializing. Have fun!");
